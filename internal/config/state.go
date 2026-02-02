@@ -7,12 +7,23 @@ import (
 	"time"
 )
 
+// InstallType represents how a package was installed
+type InstallType string
+
+const (
+	InstallTypeBinary    InstallType = "binary"     // Extracted from tar.gz/zip
+	InstallTypeAppImage  InstallType = "appimage"   // AppImage executable
+	InstallTypeSystem    InstallType = "system"     // System package (.deb/.rpm)
+	InstallTypeSingle    InstallType = "single"     // Single binary file
+)
+
 // InstalledPackage represents the state of an installed package
 type InstalledPackage struct {
-	Repo        string    `json:"repo"`
-	Version     string    `json:"version"`
-	AssetName   string    `json:"asset_name,omitempty"`
-	InstalledAt time.Time `json:"installed_at"`
+	Repo        string      `json:"repo"`
+	Version     string      `json:"version"`
+	AssetName   string      `json:"asset_name,omitempty"`
+	InstallType InstallType `json:"install_type"`
+	InstalledAt time.Time   `json:"installed_at"`
 }
 
 // State represents the installation state

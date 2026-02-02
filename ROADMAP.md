@@ -21,6 +21,7 @@ Deca 是一个声明式的 GitHub Release 包管理器，通过 TOML 配置文�
 - [x] **Pattern 匹配** - 支持 glob 模式过滤
 - [x] **仓库搜索** - GitHub API 搜索仓库
 - [x] **Asset 优先级** - native > tar.gz > .deb > AppImage > .rpm
+- [x] **Linux 匹配优化** - 排除 freebsd/openbsd/netbsd 等误匹配
 
 ### 下载与安装
 - [x] **HTTP 下载** - 下载 Release Asset
@@ -30,14 +31,17 @@ Deca 是一个声明式的 GitHub Release 包管理器，通过 TOML 配置文�
 - [x] **二进制安装** - 复制到 bin_dir 并设置权限
 - [x] **AppImage 支持** - 直接复制，设置执行权限
 - [x] **系统包支持** - .deb (apt)、.rpm (dnf/yum) 需要 sudo
-- [x] **状态更新** - 安装后更新状态文件
+- [x] **状态更新** - 安装后更新状态文件（包含安装类型）
+- [x] **临时目录管理** - 修复提取后清理问题
+- [x] **智能卸载** - 根据安装类型选择卸载方式
 
 ### CLI 命令
 - [x] `deca apply` - 应用配置，安装/更新所有包
 - [x] `deca add` - 添加新包到配置
 - [x] `deca add -i/--interactive` - 交互式 asset 选择
 - [x] `deca add --asset` - 指定 asset 模式
-- [x] `deca remove` - 从配置移除包
+- [x] `deca remove` - 卸载并从配置移除包
+- [x] `deca remove -k/--keep-installed` - 仅从配置移除，保留安装
 - [x] `deca list` - 列出已配置的包
 - [x] `deca status` - 检查更新
 - [x] `deca update` - 更新包到最新版本
@@ -46,9 +50,12 @@ Deca 是一个声明式的 GitHub Release 包管理器，通过 TOML 配置文�
 - [x] `deca init` - 初始化配置，检测系统信息
 - [x] `deca config` - 查看/编辑配置文件
 - [x] `deca --version` - 显示版本信息
+- [x] `deca --dry-run` - 预览操作而不执行
+- [x] `deca -v/--verbose` - 详细输出模式
 
 ### UI/UX
 - [x] **彩色输出** - 不同类型信息使用不同颜色
+- [x] **彩色帮助** - help 命令的彩色格式化输出
 - [x] **进度条** - 下载进度可视化
 - [x] **交互式选择** - 数字选择 asset
 - [x] **版本信息** - git tags 作为版本号
@@ -68,7 +75,7 @@ Deca 是一个声明式的 GitHub Release 包管理器，通过 TOML 配置文�
 
 ### 用户体验
 - [ ] 配置差异显示 (`deca diff`)
-- [ ] 更友好的错误信息
+- [ ] 错误信息国际化
 
 ### 配置增强
 - [ ] **版本锁定** - 指定固定版本安装
@@ -88,7 +95,7 @@ Deca 是一个声明式的 GitHub Release 包管理器，通过 TOML 配置文�
 
 ### 平台支持
 - [ ] **Homebrew 导入** - 从 Homebrew 迁移
-- [ ] **Scoop  Scoop 迁移导入** - 从
+- [ ] **Scoop 导入** - 从 Scoop 迁移
 - [ ] **插件系统** - 自定义安装逻辑
 
 ---
@@ -118,11 +125,14 @@ Deca 是一个声明式的 GitHub Release 包管理器，通过 TOML 配置文�
 - [x] 交互式 asset 选择
 - [x] 下载进度条
 - [x] init/config 命令
+- [x] 彩色输出和帮助信息
+- [x] Linux asset 匹配优化
 
 ### v0.2.0 (短期)
 - [ ] 改进下载和提取逻辑 (.tar.xz)
 - [ ] 更好的错误处理
 - [ ] 配置 diff 功能
+- [ ] 校验和验证
 
 ### v0.3.0 (中期)
 - [ ] 多配置支持

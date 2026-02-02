@@ -173,6 +173,7 @@ func doInstall(ctx context.Context, ghClient *github.Client, installer *install.
 			Repo:        pkg.Repo,
 			Version:     release.TagName,
 			AssetName:   asset.Name,
+			InstallType: result.InstallType,
 			InstalledAt: time.Now(),
 		})
 		state.SaveState(statePath)

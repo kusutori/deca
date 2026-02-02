@@ -9,6 +9,7 @@
 - 交互式选择 - 可视化选择下载哪个 asset
 - 状态跟踪 - 自动记录安装版本和时间
 - 跨平台 - Linux、macOS、Windows
+- 彩色输出 - 清晰的命令帮助和状态显示
 
 ## 安装
 
@@ -84,7 +85,8 @@ check_interval = "24h"
 | `deca add <owner/repo> -i` | 交互式选择 asset |
 | `deca add <owner/repo> --asset "*.deb"` | 指定 asset 模式 |
 | `deca add <owner/repo> --no-install` | 仅添加配置 |
-| `deca remove <name>` | 移除包 |
+| `deca remove <name>` | 卸载并从配置移除包 |
+| `deca remove <name> -k` | 仅从配置移除，保留安装 |
 | `deca list` | 列出包和状态 |
 | `deca config show` | 显示配置和安装状态 |
 | `deca config` | 编辑配置文件 |
@@ -93,6 +95,8 @@ check_interval = "24h"
 | `deca search <query>` | 搜索 GitHub |
 | `deca doctor` | 健康检查 |
 | `deca --version` | 显示版本 |
+| `deca --dry-run` | 预览操作而不执行 |
+| `deca -v/--verbose` | 详细输出模式 |
 
 ## 支持的包格式
 
@@ -128,6 +132,14 @@ check_interval = "24h"
 | 配置 | `~/.config/deca/deca.toml` | `%APPDATA%\deca\deca.toml` |
 | 状态 | `~/.local/state/deca/state.json` | `%LOCALAPPDATA%\deca\state.json` |
 | 二进制 | `~/.local/bin` | `%LOCALAPPDATA%\deca\bin` |
+
+## 全局选项
+
+| 选项 | 说明 |
+|------|------|
+| `--config <path>` | 指定配置文件路径 |
+| `--dry-run` | 预览操作而不执行 |
+| `-v, --verbose` | 详细输出模式 |
 
 ## GitHub Token
 

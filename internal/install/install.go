@@ -11,6 +11,7 @@ import (
 	"strings"
 	"syscall"
 
+	"github.com/deca-org/deca/internal/config"
 	"github.com/deca-org/deca/internal/download"
 	"github.com/deca-org/deca/internal/github"
 )
@@ -27,10 +28,11 @@ func NewInstaller(binDir string) *Installer {
 
 // InstallResult contains the result of an installation
 type InstallResult struct {
-	Name       string
-	Version    string
-	BinaryPath string
-	AssetName  string
+	Name        string
+	Version     string
+	BinaryPath  string
+	AssetName   string
+	InstallType config.InstallType
 }
 
 // Install installs a package from a release
@@ -100,10 +102,11 @@ func (i *Installer) Install(name string, release *github.ReleaseInfo, asset *git
 	}
 
 	return &InstallResult{
-		Name:       name,
-		Version:    release.TagName,
-		BinaryPath: finalPath,
-		AssetName:  asset.Name,
+		Name:        name,
+		Version:     release.TagName,
+		BinaryPath:  finalPath,
+		AssetName:   asset.Name,
+		InstallType: config.InstallTypeBinary,
 	}, nil
 }
 
@@ -134,10 +137,11 @@ func (i *Installer) installAppImage(name string, release *github.ReleaseInfo, as
 	}
 
 	return &InstallResult{
-		Name:       name,
-		Version:    release.TagName,
-		BinaryPath: finalPath,
-		AssetName:  asset.Name,
+		Name:        name,
+		Version:     release.TagName,
+		BinaryPath:  finalPath,
+		AssetName:   asset.Name,
+		InstallType: config.InstallTypeAppImage,
 	}, nil
 }
 
@@ -192,10 +196,11 @@ func (i *Installer) installSystemPackage(name string, release *github.ReleaseInf
 	os.Remove(downloadPath)
 
 	return &InstallResult{
-		Name:       name,
-		Version:    release.TagName,
-		BinaryPath: "", // System packages don't have a simple binary path
-		AssetName:  asset.Name,
+		Name:        name,
+		Version:     release.TagName,
+		BinaryPath:  "", // System packages don't have a simple binary path
+		AssetName:   asset.Name,
+		InstallType: config.InstallTypeSystem,
 	}, nil
 }
 
@@ -252,8 +257,20 @@ func copyFile(src, dst string) error {
 	return dstFile.Sync()
 }
 
-// Uninstall removes a binary
-func (i *Installer) Uninstall(name string) error {
+// Uninstall removes a package based on its install type
+func (i *Installer) Uninstall(name string, installType config.InstallType) error {
+	switch installType {
+	case config.InstallTypeSystem:
+		return i.uninstallSystemPackage(name)
+	case config.InstallTypeAppImage:
+		return i.uninstallAppImage(name)
+	default:
+		return i.uninstallBinary(name)
+	}
+}
+
+// uninstallBinary removes a binary installed from archive
+func (i *Installer) uninstallBinary(name string) error {
 	path := filepath.Join(i.BinDir, name)
 	if runtime.GOOS == "windows" {
 		path += ".exe"
@@ -272,6 +289,59 @@ func (i *Installer) Uninstall(name string) error {
 	}
 
 	return os.ErrNotExist
+}
+
+// uninstallAppImage removes an AppImage
+func (i *Installer) uninstallAppImage(name string) error {
+	path := filepath.Join(i.BinDir, name)
+	if _, err := os.Stat(path); err == nil {
+		return os.Remove(path)
+	}
+	return os.ErrNotExist
+}
+
+// uninstallSystemPackage removes a system package
+func (i *Installer) uninstallSystemPackage(name string) error {
+	// Detect package type from binary name
+	// Try to find the package name (usually matches the binary name)
+	pkgName := name
+
+	// Determine which package manager to use
+	var pkgManager string
+	if _, err := exec.LookPath("dnf"); err == nil {
+		pkgManager = "dnf"
+	} else if _, err := exec.LookPath("yum"); err == nil {
+		pkgManager = "yum"
+	} else if _, err := exec.LookPath("apt"); err == nil {
+		pkgManager = "apt"
+	} else {
+		return fmt.Errorf("no supported package manager found")
+	}
+
+	// Remove via system package manager
+	if syscall.Getuid() != 0 {
+		if !IsSudoCached() {
+			fmt.Printf("Removing %s requires sudo privileges.\n", name)
+		}
+		return SudoRun(pkgManager, "remove", "-y", pkgName)
+	}
+
+	// Running as root
+	var cmd *exec.Cmd
+	switch pkgManager {
+	case "dnf":
+		cmd = exec.Command("dnf", "remove", "-y", pkgName)
+	case "yum":
+		cmd = exec.Command("yum", "remove", "-y", pkgName)
+	case "apt":
+		cmd = exec.Command("apt", "remove", "-y", pkgName)
+	default:
+		return fmt.Errorf("unsupported package manager: %s", pkgManager)
+	}
+	cmd.Stdin = os.Stdin
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	return cmd.Run()
 }
 
 // EnsureBinDir creates the binary directory if it doesn't exist
@@ -303,9 +373,9 @@ func (i *Installer) AddToPATHInstructions() string {
 	shell := detectShell()
 	switch shell {
 	case "bash":
-		return fmt.Sprintf(`echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.bashrc && source ~/.bashrc`)
+		return `echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.bashrc && source ~/.bashrc`
 	case "zsh":
-		return fmt.Sprintf(`echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.zshrc && source ~/.zshrc`)
+		return `echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.zshrc && source ~/.zshrc`
 	case "fish":
 		return fmt.Sprintf(`fish_add_path %s`, i.BinDir)
 	default:

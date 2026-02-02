@@ -55,11 +55,12 @@ environment variables and opens the config file.`,
 
 		// Open editor
 		var err error
-		if runtime.GOOS == "windows" {
+		switch runtime.GOOS {
+		case "windows":
 			err = exec.Command("cmd", "/c", "start", editor, configPath).Start()
-		} else if runtime.GOOS == "darwin" {
+		case "darwin":
 			err = exec.Command("open", editor, configPath).Start()
-		} else {
+		default:
 			// Linux/Unix - use the editor directly
 			editorArgs := strings.Split(editor, " ")
 			if len(editorArgs) > 1 {
@@ -81,7 +82,7 @@ environment variables and opens the config file.`,
 var ConfigShowCmd = &cobra.Command{
 	Use:   "show",
 	Short: "Show current configuration",
-	Long: `Display the current configuration file content with installed status.`,
+	Long:  `Display the current configuration file content with installed status.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		configPath := getConfigPath()
 
@@ -143,7 +144,7 @@ var ConfigShowCmd = &cobra.Command{
 var ConfigPathCmd = &cobra.Command{
 	Use:   "path",
 	Short: "Show config file path",
-	Long: `Display the path to the configuration file.`,
+	Long:  `Display the path to the configuration file.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		configPath := getConfigPath()
 		fmt.Println(configPath)

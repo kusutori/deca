@@ -155,6 +155,7 @@ func installPackage(ctx context.Context, ghClient *github.Client, installer *ins
 		Repo:        pkg.Repo,
 		Version:     release.TagName,
 		AssetName:   asset.Name,
+		InstallType: result.InstallType,
 		InstalledAt: time.Now(),
 	})
 

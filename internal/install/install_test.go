@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/deca-org/deca/internal/config"
 	"github.com/deca-org/deca/internal/github"
 )
 
@@ -61,7 +62,7 @@ func TestUninstall(t *testing.T) {
 	}
 
 	// Uninstall
-	if err := installer.Uninstall("testbinary"); err != nil {
+	if err := installer.Uninstall("testbinary", config.InstallTypeBinary); err != nil {
 		t.Fatalf("failed to uninstall: %v", err)
 	}
 
@@ -77,7 +78,7 @@ func TestUninstallNotExists(t *testing.T) {
 	installer := NewInstaller(binDir)
 
 	// Try to uninstall non-existent binary
-	err := installer.Uninstall("nonexistent")
+	err := installer.Uninstall("nonexistent", config.InstallTypeBinary)
 	if err != os.ErrNotExist {
 		t.Errorf("expected os.ErrNotExist, got %v", err)
 	}
@@ -192,10 +193,11 @@ func TestDetectShell(t *testing.T) {
 
 func TestInstallResult(t *testing.T) {
 	result := &InstallResult{
-		Name:       "test",
-		Version:    "v1.0.0",
-		BinaryPath: "/usr/local/bin/test",
-		AssetName:  "test-linux-amd64.tar.gz",
+		Name:        "test",
+		Version:     "v1.0.0",
+		BinaryPath:  "/usr/local/bin/test",
+		AssetName:   "test-linux-amd64.tar.gz",
+		InstallType: config.InstallTypeBinary,
 	}
 
 	if result.Name != "test" {
@@ -203,6 +205,9 @@ func TestInstallResult(t *testing.T) {
 	}
 	if result.Version != "v1.0.0" {
 		t.Errorf("expected version 'v1.0.0', got '%s'", result.Version)
+	}
+	if result.InstallType != config.InstallTypeBinary {
+		t.Errorf("expected InstallType 'binary', got '%s'", result.InstallType)
 	}
 }
 
