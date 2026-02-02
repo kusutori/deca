@@ -14,14 +14,16 @@ var SearchCmd = &cobra.Command{
 	Short: "Search for packages on GitHub",
 	Long: `Search for packages/repositories on GitHub.
 
-This command searches GitHub for repositories that have
-releases with binary assets.`,
+This command searches GitHub for repositories with releases,
+sorted by stars. Results include CLI tools and other utilities
+that can be installed via deca.`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		query := args[0]
 
 		ghClient := github.NewClient()
-		results, err := ghClient.SearchRepositories(getContext(), query+" topic:cli")
+		// Search for repos with releases, prefer CLI tools but include all
+		results, err := ghClient.SearchRepositories(getContext(), query+" has:releases sort:stars")
 		if err != nil {
 			return fmt.Errorf("search failed: %w", err)
 		}
