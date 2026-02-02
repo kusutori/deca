@@ -7,6 +7,8 @@ import (
 
 	"github.com/deca-org/deca/internal/config"
 	"github.com/deca-org/deca/internal/install"
+	"github.com/deca-org/deca/internal/ui"
+	"github.com/fatih/color"
 	"github.com/spf13/cobra"
 )
 
@@ -35,45 +37,66 @@ along with their installed status.`,
 		// Check if binaries exist
 		installer := install.NewInstaller(cfg.BinDir)
 
-		fmt.Println("Packages:")
+		ui.Primary.Println("Packages:")
 		fmt.Println()
 
 		if len(cfg.Packages) == 0 {
-			fmt.Println("  No packages configured")
+			ui.Warning.Println("  No packages configured")
 			fmt.Println()
-			fmt.Println("  Add packages with: deca add owner/repo")
+			ui.Info.Println("  Add packages with: deca add owner/repo")
 			return nil
 		}
 
 		for name, pkg := range cfg.Packages {
 			installed, exists := state.GetPackage(name)
-			status := "[ ]"
-			if exists {
-				status = "[*]"
-			}
 
-			version := installed.Version
-			if version == "" {
-				version = "(not installed)"
-			}
+			// Determine status indicator and color
+			var statusStr string
+			statusStr = "[ ]"
 
 			binaryPath := installer.BinDir + "/" + name
 			if runtime.GOOS == "windows" {
 				binaryPath += ".exe"
 			}
 
+			var statusColor interface{}
 			if _, err := os.Stat(binaryPath); err == nil {
-				status = "[*]"
+				// Binary exists
+				if exists {
+					statusStr = "[✓]"
+					statusColor = ui.Installed
+				} else {
+					statusStr = "[?]"
+					statusColor = ui.Warning
+				}
 			} else if exists {
-				status = "[?]"
+				// In state but binary missing
+				statusStr = "[!]"
+				statusColor = ui.Warning
+			} else {
+				// Not installed
+				statusStr = "[ ]"
+				statusColor = ui.NotInstalled
 			}
 
-			fmt.Printf("  %s %s -> %s\n", status, name, pkg.Repo)
-			fmt.Printf("      Version: %s\n", version)
+			// Print with colors
+			switch c := statusColor.(type) {
+			case *color.Color:
+				c.Print("  " + statusStr + " ")
+			}
+			ui.PackageName.Println(name)
+			ui.PackageRepo.Printf("    -> %s\n", pkg.Repo)
+
+			version := installed.Version
+			if version == "" {
+				ui.SearchMeta.Println("    Version: (not installed)")
+			} else {
+				ui.SearchMeta.Printf("    Version: %s\n", version)
+			}
 
 			if verbose {
 				if pkg.Asset != "" {
-					fmt.Printf("      Asset: %s\n", pkg.Asset)
+					ui.SearchMeta.Printf("    Asset: %s\n", pkg.Asset)
 				}
 				if pkg.OS != "" || pkg.Arch != "" {
 					osArch := pkg.OS
@@ -83,7 +106,7 @@ along with their installed status.`,
 						}
 						osArch += pkg.Arch
 					}
-					fmt.Printf("      Platform: %s\n", osArch)
+					ui.SearchMeta.Printf("    Platform: %s\n", osArch)
 				}
 			}
 			fmt.Println()

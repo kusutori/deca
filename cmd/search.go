@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/deca-org/deca/internal/github"
+	"github.com/deca-org/deca/internal/ui"
 	"github.com/spf13/cobra"
 )
 
@@ -26,21 +27,34 @@ releases with binary assets.`,
 		}
 
 		if len(results) == 0 {
-			fmt.Println("No results found")
+			ui.PrintWarning("No results found for: " + query)
 			return nil
 		}
 
-		fmt.Printf("Search results for '%s':\n", query)
+		ui.SearchTitle.Printf("Search results for '%s':\n", query)
 		fmt.Println()
 
 		for _, r := range results {
-			fmt.Printf("  %s\n", r.FullName)
+			// Repository name with color
+			ui.SearchRepo.Printf("  %s\n", r.FullName)
+
+			// Description with color
 			if r.Desc != "" {
-				fmt.Printf("    %s\n", truncate(r.Desc, 60))
+				ui.SearchDesc.Printf("    %s\n", truncate(r.Desc, 60))
 			}
-			fmt.Printf("    Stars: %d | Updated: %s\n", r.Stars, r.UpdatedAt)
+
+			// Stars and updated date with color
+			ui.SearchMeta.Printf("    ")
+			ui.SearchStars.Printf("★ %d", r.Stars)
+			ui.SearchMeta.Printf(" | ")
+			ui.SearchMeta.Printf("Updated: %s", r.UpdatedAt)
+			ui.SearchMeta.Println()
 			fmt.Println()
 		}
+
+		// Print add command hint
+		ui.Info.Printf("  Add with: deca add <owner/repo>\n")
+		fmt.Println()
 
 		return nil
 	},

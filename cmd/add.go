@@ -8,6 +8,7 @@ import (
 	"github.com/deca-org/deca/internal/config"
 	"github.com/deca-org/deca/internal/github"
 	"github.com/deca-org/deca/internal/install"
+	"github.com/deca-org/deca/internal/ui"
 	"github.com/spf13/cobra"
 )
 
@@ -64,7 +65,7 @@ optionally installs it immediately.`,
 			return fmt.Errorf("failed to save config: %w", err)
 		}
 
-		fmt.Printf("Added %s -> %s\n", name, repo)
+		ui.Success.Printf("Added %s -> %s\n", name, repo)
 
 		// Install if requested
 		if !noInstall {
@@ -109,6 +110,6 @@ func doInstall(ctx context.Context, ghClient *github.Client, installer *install.
 		return fmt.Errorf("%s: failed to install: %w", name, err)
 	}
 
-	fmt.Printf("Installed %s v%s to %s\n", name, release.TagName, result.BinaryPath)
+	ui.Success.Printf("Installed %s v%s to %s\n", name, release.TagName, result.BinaryPath)
 	return nil
 }

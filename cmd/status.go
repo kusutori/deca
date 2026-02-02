@@ -10,6 +10,7 @@ import (
 
 	"github.com/deca-org/deca/internal/config"
 	"github.com/deca-org/deca/internal/github"
+	"github.com/deca-org/deca/internal/ui"
 	"github.com/spf13/cobra"
 	"golang.org/x/sync/errgroup"
 )
@@ -40,7 +41,7 @@ your installed packages are available.`,
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
 
-		fmt.Println("Checking for updates...")
+		ui.Info.Println("Checking for updates...")
 		fmt.Println()
 
 		updates := make([]string, 0)
@@ -69,18 +70,21 @@ your installed packages are available.`,
 		}
 
 		if len(updates) > 0 {
-			fmt.Println("Updates available:")
+			ui.UpdateAvail.Println("Updates available:")
 			for _, name := range updates {
-				fmt.Printf("  %s\n", name)
+				ui.PackageName.Printf("  [→] %s\n", name)
 			}
+			fmt.Println()
+			ui.Info.Printf("  Run 'deca update' to update all packages\n")
 		} else {
-			fmt.Println("All packages are up to date")
+			ui.Installed.Println("✓ All packages are up to date")
 		}
 
 		if len(errors) > 0 {
-			fmt.Println("\nErrors:")
+			fmt.Println()
+			ui.Warning.Println("Errors:")
 			for _, e := range errors {
-				fmt.Printf("  %v\n", e)
+				ui.Error.Printf("  - %v\n", e)
 			}
 		}
 

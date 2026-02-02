@@ -7,6 +7,7 @@ import (
 	"github.com/deca-org/deca/internal/config"
 	"github.com/deca-org/deca/internal/github"
 	"github.com/deca-org/deca/internal/install"
+	"github.com/deca-org/deca/internal/ui"
 	"github.com/spf13/cobra"
 )
 
@@ -50,7 +51,7 @@ With a name, updates only that specific package.`,
 			packagesToUpdate = map[string]config.Package{specificName: pkg}
 		}
 
-		fmt.Println("Updating packages...")
+		ui.Primary.Println("Updating packages...")
 		fmt.Println()
 
 		for name, pkg := range packagesToUpdate {
@@ -85,8 +86,8 @@ With a name, updates only that specific package.`,
 				InstalledAt: time.Now(),
 			})
 
-			fmt.Printf("Updated %s to v%s\n", name, release.TagName)
-			fmt.Printf("  Binary: %s\n", result.BinaryPath)
+			ui.Success.Printf("Updated %s to v%s\n", name, release.TagName)
+			ui.SearchMeta.Printf("  Binary: %s\n", result.BinaryPath)
 			fmt.Println()
 		}
 

@@ -5,6 +5,7 @@ import (
 
 	"github.com/deca-org/deca/internal/config"
 	"github.com/deca-org/deca/internal/install"
+	"github.com/deca-org/deca/internal/ui"
 	"github.com/spf13/cobra"
 )
 
@@ -40,16 +41,16 @@ file. It does not remove the installed binary.`,
 			return fmt.Errorf("failed to save config: %w", err)
 		}
 
-		fmt.Printf("Removed %s from config\n", name)
+		ui.Warning.Printf("Removed %s from config\n", name)
 
 		// Optionally remove binary
 		removeBinary, _ := cmd.Flags().GetBool("remove-binary")
 		if removeBinary {
 			installer := install.NewInstaller(cfg.BinDir)
 			if err := installer.Uninstall(name); err != nil {
-				fmt.Printf("Warning: failed to remove binary: %v\n", err)
+				ui.Warning.Printf("Warning: failed to remove binary: %v\n", err)
 			} else {
-				fmt.Printf("Removed binary %s\n", name)
+				ui.Warning.Printf("Removed binary %s\n", name)
 			}
 		}
 

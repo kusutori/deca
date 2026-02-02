@@ -11,6 +11,7 @@ import (
 	"github.com/deca-org/deca/internal/config"
 	"github.com/deca-org/deca/internal/github"
 	"github.com/deca-org/deca/internal/install"
+	"github.com/deca-org/deca/internal/ui"
 	"github.com/spf13/cobra"
 	"golang.org/x/sync/errgroup"
 )
@@ -82,23 +83,25 @@ are installed with the specified versions.`,
 
 		// Print results
 		if len(results) > 0 {
-			fmt.Println("Installed/Updated:")
+			ui.Primary.Println("Installed/Updated:")
 			for _, r := range results {
-				fmt.Printf("  %s\n", r)
+				ui.PackageName.Printf("  %s\n", r)
 			}
+			fmt.Println()
 		}
 
 		if len(errors) > 0 {
-			fmt.Println("\nErrors:")
+			ui.Error.Println("Errors:")
 			for _, e := range errors {
-				fmt.Printf("  %v\n", e)
+				ui.Warning.Printf("  %v\n", e)
 			}
+			fmt.Println()
 		}
 
 		// Check if bin dir is in PATH
 		if !installer.BinDirInPATH() {
-			fmt.Printf("\nNote: %s is not in your PATH.\n", cfg.BinDir)
-			fmt.Printf("Add it with: %s\n", installer.AddToPATHInstructions())
+			ui.Warning.Printf("\nNote: %s is not in your PATH.\n", cfg.BinDir)
+			ui.Info.Printf("Add it with: %s\n", installer.AddToPATHInstructions())
 		}
 
 		return nil
@@ -135,7 +138,7 @@ func installPackage(ctx context.Context, ghClient *github.Client, installer *ins
 
 	if exists && currentVersion == newVersion {
 		if verbose {
-			fmt.Printf("%s: already installed (v%s)\n", name, currentVersion)
+			ui.SearchMeta.Printf("%s: already installed (v%s)\n", name, currentVersion)
 		}
 		return fmt.Sprintf("%s v%s (up to date)", name, newVersion), nil
 	}
