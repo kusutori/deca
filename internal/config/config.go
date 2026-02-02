@@ -52,8 +52,20 @@ func DefaultBinDir() string {
 // Config represents the main configuration file
 type Config struct {
 	BinDir    string              `toml:"bin_dir"`
+	OS        string              `toml:"os"`
+	Arch      string              `toml:"arch"`
 	Packages  map[string]Package  `toml:"packages"`
 	Settings  Settings            `toml:"settings"`
+	SystemInfo *SystemInfo        `toml:"system_info"`
+}
+
+// SystemInfo stores detected system information
+type SystemInfo struct {
+	OS            string `toml:"os"`
+	Arch          string `toml:"arch"`
+	Distribution  string `toml:"distribution"`
+	PackageManager string `toml:"package_manager"`
+	BinDir        string `toml:"bin_dir"`
 }
 
 // Package represents a single package configuration
@@ -93,9 +105,23 @@ func Load(path string) (*Config, error) {
 		cfg.BinDir = binDir
 	}
 
+	// Extract OS and Arch
+	if os, ok := generic["os"].(string); ok {
+		cfg.OS = os
+	}
+	if arch, ok := generic["arch"].(string); ok {
+		cfg.Arch = arch
+	}
+
 	// Set defaults
 	if cfg.BinDir == "" {
 		cfg.BinDir = DefaultBinDir()
+	}
+	if cfg.OS == "" {
+		cfg.OS = runtime.GOOS
+	}
+	if cfg.Arch == "" {
+		cfg.Arch = runtime.GOARCH
 	}
 
 	// Parse packages - handle both string and table formats
