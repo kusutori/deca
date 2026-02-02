@@ -81,7 +81,7 @@ environment variables and opens the config file.`,
 var ConfigShowCmd = &cobra.Command{
 	Use:   "show",
 	Short: "Show current configuration",
-	Long: `Display the current configuration file content.`,
+	Long: `Display the current configuration file content with installed status.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		configPath := getConfigPath()
 
@@ -92,11 +92,15 @@ var ConfigShowCmd = &cobra.Command{
 			return nil
 		}
 
-		// Load and display config
+		// Load config
 		cfg, err := config.Load(configPath)
 		if err != nil {
 			return fmt.Errorf("failed to load config: %w", err)
 		}
+
+		// Load state
+		statePath := config.DefaultStatePath()
+		state, _ := config.LoadState(statePath)
 
 		ui.Primary.Println("Configuration:")
 		ui.SearchMeta.Printf("  Config File: %s\n", configPath)
@@ -108,11 +112,27 @@ var ConfigShowCmd = &cobra.Command{
 		if len(cfg.Packages) > 0 {
 			ui.Primary.Println("Packages:")
 			for name, pkg := range cfg.Packages {
+				// Get installed state
+				installed, exists := state.GetPackage(name)
+
 				ui.PackageName.Printf("  %s\n", name)
 				ui.SearchMeta.Printf("    -> %s\n", pkg.Repo)
+
+				// Show installed version if exists
+				if exists {
+					if installed.Version != "" {
+						ui.SearchMeta.Printf("    Installed: %s\n", installed.Version)
+					}
+					if installed.InstalledAt.IsZero() == false {
+						ui.SearchMeta.Printf("    At: %s\n", installed.InstalledAt.Format("2006-01-02"))
+					}
+				} else {
+					ui.Warning.Printf("    [Not installed]\n")
+				}
 			}
 		} else {
 			ui.Warning.Println("  No packages configured")
+			ui.Info.Println("  Add packages with: deca add owner/repo")
 		}
 
 		return nil

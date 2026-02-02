@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/deca-org/deca/internal/config"
@@ -54,6 +55,9 @@ With a name, updates only that specific package.`,
 		ui.Primary.Println("Updating packages...")
 		fmt.Println()
 
+		updatedCount := 0
+		skippedCount := 0
+
 		for name, pkg := range packagesToUpdate {
 			owner, repo, err := github.ParseRepo(pkg.Repo)
 			if err != nil {
@@ -72,6 +76,20 @@ With a name, updates only that specific package.`,
 				return fmt.Errorf("%s: no matching asset: %w", name, err)
 			}
 
+			// Check if already at latest version
+			installed, exists := state.GetPackage(name)
+			currentVersion := strings.TrimPrefix(installed.Version, "v")
+			newVersion := strings.TrimPrefix(release.TagName, "v")
+
+			if exists && currentVersion == newVersion {
+				// Already at latest version
+				if verbose {
+					ui.SearchMeta.Printf("%s: already at latest (v%s)\n", name, currentVersion)
+				}
+				skippedCount++
+				continue
+			}
+
 			// Install
 			result, err := installer.Install(name, release, asset)
 			if err != nil {
@@ -87,8 +105,21 @@ With a name, updates only that specific package.`,
 			})
 
 			ui.Success.Printf("Updated %s to v%s\n", name, release.TagName)
-			ui.SearchMeta.Printf("  Binary: %s\n", result.BinaryPath)
+			if result.BinaryPath != "" {
+				ui.SearchMeta.Printf("  Binary: %s\n", result.BinaryPath)
+			} else {
+				ui.SearchMeta.Println("  (system package)")
+			}
 			fmt.Println()
+			updatedCount++
+		}
+
+		// Summary
+		if updatedCount > 0 {
+			ui.Success.Printf("Updated %d package(s)\n", updatedCount)
+		}
+		if skippedCount > 0 {
+			ui.Installed.Printf("%d package(s) already up to date\n", skippedCount)
 		}
 
 		// Save state
