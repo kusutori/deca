@@ -21,6 +21,7 @@ var ConfigCmd = &cobra.Command{
 Subcommands:
   edit   Open config in editor (default)
   show   Display current configuration
+  diff   Show changes since last apply
   path   Show config file path`,
 }
 
@@ -152,11 +153,101 @@ var ConfigPathCmd = &cobra.Command{
 	},
 }
 
+// ConfigDiffCmd shows the difference between config and state
+var ConfigDiffCmd = &cobra.Command{
+	Use:   "diff",
+	Short: "Show changes between config and installed packages",
+	Long: `Show the differences between your configuration file and
+what is currently installed. This helps identify packages that:
+  - Are in config but not installed
+  - Are installed but not in config
+  - Have updates available`,
+	RunE: func(cmd *cobra.Command, args []string) error {
+		configPath := getConfigPath()
+
+		// Check if config exists
+		if _, err := os.Stat(configPath); os.IsNotExist(err) {
+			ui.Warning.Printf("Config file not found: %s\n", configPath)
+			ui.Info.Println("Run 'deca init' to create a default config.")
+			return nil
+		}
+
+		// Load config
+		cfg, err := config.Load(configPath)
+		if err != nil {
+			return fmt.Errorf("failed to load config: %w", err)
+		}
+
+		// Load state
+		statePath := config.DefaultStatePath()
+		state, err := config.LoadState(statePath)
+		if err != nil {
+			// State file might not exist
+			state = &config.State{Packages: make(map[string]config.InstalledPackage)}
+		}
+
+		ui.Primary.Println("Configuration Changes:")
+		fmt.Println()
+
+		// Track changes
+		var toInstall []string
+		var toRemove []string
+
+		// Check packages in config vs state
+		for name := range cfg.Packages {
+			_, exists := state.GetPackage(name)
+			if !exists {
+				toInstall = append(toInstall, name)
+			}
+		}
+
+		// Check packages in state but not in config
+		for name := range state.Packages {
+			if _, exists := cfg.Packages[name]; !exists {
+				toRemove = append(toRemove, name)
+			}
+		}
+
+		// Print summary
+		if len(toInstall) > 0 {
+			ui.Warning.Println("Packages to install:")
+			for _, name := range toInstall {
+				pkg := cfg.Packages[name]
+				ui.PackageName.Printf("  + %s\n", name)
+				ui.SearchMeta.Printf("    -> %s\n", pkg.Repo)
+			}
+			fmt.Println()
+		}
+
+		if len(toRemove) > 0 {
+			ui.Warning.Println("Installed packages not in config (will be removed on next apply):")
+			for _, name := range toRemove {
+				installed, _ := state.GetPackage(name)
+				ui.PackageName.Printf("  - %s\n", name)
+				ui.SearchMeta.Printf("    Installed: %s\n", installed.Version)
+			}
+			fmt.Println()
+		}
+
+		// Summary
+		totalChanges := len(toInstall) + len(toRemove)
+		if totalChanges == 0 {
+			ui.Success.Println("No changes - config matches installed packages")
+		} else {
+			ui.Info.Printf("Total changes: %d\n", totalChanges)
+			ui.Info.Println("Run 'deca apply' to apply these changes")
+		}
+
+		return nil
+	},
+}
+
 func init() {
 	// Add subcommands to config
 	ConfigCmd.AddCommand(ConfigEditCmd)
 	ConfigCmd.AddCommand(ConfigShowCmd)
 	ConfigCmd.AddCommand(ConfigPathCmd)
+	ConfigCmd.AddCommand(ConfigDiffCmd)
 
 	// Set edit as the default action when no subcommand is provided
 	ConfigCmd.RunE = ConfigEditCmd.RunE

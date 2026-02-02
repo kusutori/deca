@@ -15,6 +15,7 @@ import (
 	"github.com/deca-org/deca/internal/github"
 	"github.com/mattn/go-isatty"
 	"github.com/schollz/progressbar/v3"
+	"github.com/ulikunitz/xz"
 )
 
 // DownloadResult contains the result of a download operation
@@ -166,9 +167,18 @@ func extractTarGz(path, dest string) ([]string, error) {
 
 // extractTarXz extracts a tar.xz archive
 func extractTarXz(path, dest string) ([]string, error) {
-	// Use external xz command if available
-	// Otherwise, return an error
-	return nil, fmt.Errorf("tar.xz extraction is not yet supported; please use tar.gz assets")
+	file, err := os.Open(path)
+	if err != nil {
+		return nil, err
+	}
+	defer file.Close()
+
+	xzReader, err := xz.NewReader(file)
+	if err != nil {
+		return nil, err
+	}
+
+	return extractTar(xzReader, dest)
 }
 
 // extractZip extracts a zip archive

@@ -6,6 +6,8 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/ulikunitz/xz"
 )
 
 func TestFindBinary(t *testing.T) {
@@ -99,6 +101,61 @@ func TestExtractZip(t *testing.T) {
 	// Skip - zip extraction requires a proper zip file which we can't easily create
 	// without an external library
 	t.Skip("zip extraction test skipped - requires external zip library")
+}
+
+func TestExtractTarXz(t *testing.T) {
+	// Create a test tar.xz file
+	tmpDir := t.TempDir()
+	archivePath := filepath.Join(tmpDir, "test.tar.xz")
+	extractDir := filepath.Join(tmpDir, "extracted")
+
+	// Create test files
+	files := map[string]string{
+		"bin/tool":      "#!/bin/bash\necho hello",
+		"bin/other":     "other content",
+		"README":        "readme content",
+	}
+
+	// Create tar.xz
+	createTarXz(t, archivePath, files)
+
+	// Extract
+	filesList, err := extractTarXz(archivePath, extractDir)
+	if err != nil {
+		t.Fatalf("failed to extract tar.xz: %v", err)
+	}
+
+	// Verify files were extracted
+	if len(filesList) != 3 {
+		t.Errorf("expected 3 files, got %d", len(filesList))
+	}
+
+	for name, content := range files {
+		path := filepath.Join(extractDir, name)
+		data, err := os.ReadFile(path)
+		if err != nil {
+			t.Errorf("failed to read %s: %v", name, err)
+			continue
+		}
+		if string(data) != content {
+			t.Errorf("%s content mismatch: got %q, want %q", name, string(data), content)
+		}
+	}
+}
+
+func TestExtractTarXzSecurity(t *testing.T) {
+	tmpDir := t.TempDir()
+	archivePath := filepath.Join(tmpDir, "test.tar.xz")
+	extractDir := filepath.Join(tmpDir, "extracted")
+
+	// Create a malicious tar file with path traversal
+	createMaliciousTarXz(t, archivePath, "../outside.txt")
+
+	// Extract should fail
+	_, err := extractTarXz(archivePath, extractDir)
+	if err == nil {
+		t.Error("expected error for path traversal attack")
+	}
 }
 
 func TestExtractTarGzSecurity(t *testing.T) {
@@ -199,6 +256,72 @@ func createZip(t *testing.T, path string, files map[string]string) {
 func hasZipCommand() bool {
 	_, err := os.Stat("/usr/bin/zip")
 	return err == nil
+}
+
+// createTarXz creates a tar.xz archive for testing
+func createTarXz(t *testing.T, path string, files map[string]string) {
+	t.Helper()
+
+	out, err := os.Create(path)
+	if err != nil {
+		t.Fatalf("failed to create archive: %v", err)
+	}
+	defer out.Close()
+
+	xw, err := xz.NewWriter(out)
+	if err != nil {
+		t.Fatalf("failed to create xz writer: %v", err)
+	}
+	defer xw.Close()
+
+	tw := tar.NewWriter(xw)
+	defer tw.Close()
+
+	for name, content := range files {
+		hdr := &tar.Header{
+			Name: name,
+			Mode: 0644,
+			Size: int64(len(content)),
+		}
+		if err := tw.WriteHeader(hdr); err != nil {
+			t.Fatalf("failed to write header: %v", err)
+		}
+		if _, err := tw.Write([]byte(content)); err != nil {
+			t.Fatalf("failed to write content: %v", err)
+		}
+	}
+}
+
+// createMaliciousTarXz creates a malicious tar.xz archive with path traversal
+func createMaliciousTarXz(t *testing.T, path string, maliciousFile string) {
+	t.Helper()
+
+	out, err := os.Create(path)
+	if err != nil {
+		t.Fatalf("failed to create archive: %v", err)
+	}
+	defer out.Close()
+
+	xw, err := xz.NewWriter(out)
+	if err != nil {
+		t.Fatalf("failed to create xz writer: %v", err)
+	}
+	defer xw.Close()
+
+	tw := tar.NewWriter(xw)
+	defer tw.Close()
+
+	hdr := &tar.Header{
+		Name: maliciousFile,
+		Mode: 0644,
+		Size: 10,
+	}
+	if err := tw.WriteHeader(hdr); err != nil {
+		t.Fatalf("failed to write header: %v", err)
+	}
+	if _, err := tw.Write([]byte("malicious")); err != nil {
+		t.Fatalf("failed to write content: %v", err)
+	}
 }
 
 // Fuzz-like test for archive extraction

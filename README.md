@@ -89,6 +89,7 @@ check_interval = "24h"
 | `deca remove <name> -k` | 仅从配置移除，保留安装 |
 | `deca list` | 列出包和状态 |
 | `deca config show` | 显示配置和安装状态 |
+| `deca config diff` | 显示配置差异 |
 | `deca config` | 编辑配置文件 |
 | `deca status` | 检查更新 |
 | `deca update [name]` | 更新包 |
@@ -102,7 +103,7 @@ check_interval = "24h"
 
 | 格式 | 处理方式 |
 |------|----------|
-| tar.gz/zip | 自动提取二进制 |
+| tar.gz/tar.xz/zip | 自动提取二进制 |
 | .deb | 通过 apt 安装（需要 sudo） |
 | .rpm | 通过 dnf/yum 安装（需要 sudo） |
 | AppImage | 直接复制，设置执行权限 |

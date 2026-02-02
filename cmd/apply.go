@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/deca-org/deca/internal/config"
+	decaerrors "github.com/deca-org/deca/internal/errors"
 	"github.com/deca-org/deca/internal/github"
 	"github.com/deca-org/deca/internal/install"
 	"github.com/deca-org/deca/internal/ui"
@@ -27,7 +28,7 @@ are installed with the specified versions.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		cfg, err := loadConfig()
 		if err != nil {
-			return fmt.Errorf("failed to load config: %w", err)
+			return decaerrors.NewConfigNotFoundError(getConfigPath())
 		}
 
 		// Create installer
@@ -35,14 +36,14 @@ are installed with the specified versions.`,
 
 		// Ensure bin directory exists
 		if err := installer.EnsureBinDir(); err != nil {
-			return fmt.Errorf("failed to create bin directory: %w", err)
+			return decaerrors.NewPermissionDeniedError("create bin directory")
 		}
 
 		// Load state
 		statePath := config.DefaultStatePath()
 		state, err := config.LoadState(statePath)
 		if err != nil {
-			return fmt.Errorf("failed to load state: %w", err)
+			return decaerrors.NewDecaError(decaerrors.ErrCodeConfigInvalid, "failed to load state").WithParent(err)
 		}
 
 		// Create GitHub client
@@ -52,7 +53,7 @@ are installed with the specified versions.`,
 		// Track results
 		results := make([]string, 0)
 		var m sync.Mutex
-		var errors []error
+		var errs []error
 
 		// Process packages
 		g, ctx := errgroup.WithContext(ctx)
@@ -63,7 +64,7 @@ are installed with the specified versions.`,
 				result, err := installPackage(ctx, ghClient, installer, name, &pkg, state)
 				m.Lock()
 				if err != nil {
-					errors = append(errors, err)
+					errs = append(errs, err)
 				} else {
 					results = append(results, result)
 				}
@@ -78,7 +79,7 @@ are installed with the specified versions.`,
 
 		// Save state
 		if err := state.SaveState(statePath); err != nil {
-			return fmt.Errorf("failed to save state: %w", err)
+			return decaerrors.NewDecaError(decaerrors.ErrCodeConfigSave, "failed to save state").WithParent(err)
 		}
 
 		// Print results
@@ -90,11 +91,9 @@ are installed with the specified versions.`,
 			fmt.Println()
 		}
 
-		if len(errors) > 0 {
+		if len(errs) > 0 {
 			ui.Error.Println("Errors:")
-			for _, e := range errors {
-				ui.Warning.Printf("  %v\n", e)
-			}
+			ui.PrintMultipleErrors(errs)
 			fmt.Println()
 		}
 
@@ -115,20 +114,22 @@ func init() {
 func installPackage(ctx context.Context, ghClient *github.Client, installer *install.Installer, name string, pkg *config.Package, state *config.State) (string, error) {
 	owner, repo, err := github.ParseRepo(pkg.Repo)
 	if err != nil {
-		return "", fmt.Errorf("%s: invalid repo: %w", name, err)
+		return "", decaerrors.NewPackageNotFoundError(name).WithParent(err)
 	}
 
 	// Get latest release
 	printStatus(fmt.Sprintf("Fetching %s...", name))
 	release, err := ghClient.GetLatestRelease(ctx, owner, repo)
 	if err != nil {
-		return "", fmt.Errorf("%s: failed to fetch release: %w", name, err)
+		return "", decaerrors.NewGitHubAPIError(
+			fmt.Errorf("%s: failed to fetch release: %w", name, err),
+		)
 	}
 
 	// Find matching asset
 	asset, err := github.FindMatchingAsset(release, pkg.Asset, pkg.OS, pkg.Arch)
 	if err != nil {
-		return "", fmt.Errorf("%s: no matching asset: %w", name, err)
+		return "", decaerrors.NewAssetNotFoundError(pkg.OS, pkg.Arch, pkg.Asset).WithParent(err)
 	}
 
 	// Check if already installed
@@ -147,7 +148,7 @@ func installPackage(ctx context.Context, ghClient *github.Client, installer *ins
 	printStatus(fmt.Sprintf("Installing %s v%s...", name, release.TagName))
 	result, err := installer.Install(name, release, asset)
 	if err != nil {
-		return "", fmt.Errorf("%s: failed to install: %w", name, err)
+		return "", decaerrors.NewInstallError(name, err)
 	}
 
 	// Update state
@@ -174,7 +175,7 @@ func installPackage(ctx context.Context, ghClient *github.Client, installer *ins
 func loadConfig() (*config.Config, error) {
 	path := getConfigPath()
 	if _, err := os.Stat(path); os.IsNotExist(err) {
-		return nil, fmt.Errorf("config file not found: %s", path)
+		return nil, decaerrors.NewConfigNotFoundError(path)
 	}
 	return config.Load(path)
 }

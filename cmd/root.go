@@ -7,6 +7,7 @@ import (
 	"runtime"
 	"strings"
 
+	"github.com/deca-org/deca/internal/ui"
 	"github.com/fatih/color"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
@@ -43,7 +44,7 @@ Find more information at: https://github.com/deca-org/deca`,
 func Execute() int {
 	RootCmd.Version = Version + " (build " + Build + ")"
 	if err := RootCmd.Execute(); err != nil {
-		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		ui.PrintDecaError(err)
 		return 1
 	}
 	return 0
