@@ -22,17 +22,17 @@ type DownloadResult struct {
 	Asset    *github.AssetInfo
 	Path     string
 	Files    []string
+	TempDir  string // Caller must clean up this directory after use
 	IsBinary bool
 }
 
 // DownloadAndExtract downloads an asset and extracts it
 func DownloadAndExtract(asset *github.AssetInfo, targetOS, targetArch string) (*DownloadResult, error) {
-	// Create temp directory
+	// Create temp directory - caller must clean up via result.TempDir
 	tempDir, err := os.MkdirTemp("", "deca-*")
 	if err != nil {
 		return nil, fmt.Errorf("failed to create temp dir: %w", err)
 	}
-	defer os.RemoveAll(tempDir)
 
 	// Download file
 	downloadPath := filepath.Join(tempDir, filepath.Base(asset.Name))
@@ -42,8 +42,9 @@ func DownloadAndExtract(asset *github.AssetInfo, targetOS, targetArch string) (*
 
 	// Extract based on file type
 	result := &DownloadResult{
-		Asset: asset,
-		Path:  downloadPath,
+		Asset:   asset,
+		Path:    downloadPath,
+		TempDir: tempDir,
 	}
 
 	switch {
@@ -108,25 +109,35 @@ func downloadFile(url, path string) error {
 	if contentLength > 0 && isatty.IsTerminal(os.Stdout.Fd()) {
 		bar = progressbar.NewOptions64(contentLength,
 			progressbar.OptionSetDescription("Downloading "+filename),
-			progressbar.OptionSetWriter(os.Stdout),
+			progressbar.OptionSetWriter(os.Stderr),
 			progressbar.OptionShowBytes(true),
 			progressbar.OptionShowCount(),
-			progressbar.OptionThrottle(100*time.Millisecond),
+			progressbar.OptionSetWidth(40),
+			progressbar.OptionThrottle(65*time.Millisecond),
+			progressbar.OptionSpinnerType(14),
+			progressbar.OptionFullWidth(),
+			progressbar.OptionSetRenderBlankState(true),
+			progressbar.OptionClearOnFinish(),
+			progressbar.OptionEnableColorCodes(true),
+			progressbar.OptionSetTheme(progressbar.Theme{
+				Saucer:        "[cyan]=[reset]",
+				SaucerHead:    "[cyan]>[reset]",
+				SaucerPadding: " ",
+				BarStart:      "[",
+				BarEnd:        "]",
+			}),
 			progressbar.OptionOnCompletion(func() {
-				fmt.Fprint(os.Stdout, "\n")
+				fmt.Fprint(os.Stderr, "\n")
 			}),
 		)
 	}
 
-	// Copy with progress
-	var writer io.Writer
+	// Copy with progress - use MultiWriter to write to both file and progress bar
 	if bar != nil {
-		writer = bar
+		_, err = io.Copy(io.MultiWriter(out, bar), resp.Body)
 	} else {
-		writer = out
+		_, err = io.Copy(out, resp.Body)
 	}
-
-	_, err = io.Copy(writer, resp.Body)
 
 	// Close progress bar if used
 	if bar != nil {

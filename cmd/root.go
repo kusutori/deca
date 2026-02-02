@@ -5,13 +5,26 @@ import (
 	"fmt"
 	"os"
 	"runtime"
+	"strings"
 
+	"github.com/fatih/color"
 	"github.com/spf13/cobra"
+	"github.com/spf13/pflag"
 )
 
 // Version and Build are set at build time
 var Version = "dev"
 var Build = "unknown"
+
+// Color definitions for help output
+var (
+	titleColor  = color.New(color.FgCyan, color.Bold)
+	headerColor = color.New(color.FgYellow, color.Bold)
+	cmdColor    = color.New(color.FgGreen)
+	flagColor   = color.New(color.FgMagenta)
+	descColor   = color.New(color.FgWhite)
+	urlColor    = color.New(color.FgBlue, color.Underline)
+)
 
 // RootCmd is the root command
 var RootCmd = &cobra.Command{
@@ -46,6 +59,71 @@ func init() {
 	RootCmd.PersistentFlags().StringVar(&configPath, "config", "", "Path to config file (default: ~/.config/deca/deca.toml)")
 	RootCmd.PersistentFlags().BoolVar(&dryRun, "dry-run", false, "Show what would be done without making changes")
 	RootCmd.PersistentFlags().BoolVarP(&verbose, "verbose", "v", false, "Verbose output")
+
+	// Set custom help function
+	RootCmd.SetHelpFunc(coloredHelpFunc)
+}
+
+// coloredHelpFunc provides colorful help output
+func coloredHelpFunc(cmd *cobra.Command, args []string) {
+	// Title
+	if cmd.Long != "" {
+		lines := strings.Split(cmd.Long, "\n")
+		for _, line := range lines {
+			if strings.Contains(line, "https://") {
+				urlColor.Println(line)
+			} else {
+				titleColor.Println(line)
+			}
+		}
+		fmt.Println()
+	} else if cmd.Short != "" {
+		titleColor.Println(cmd.Short)
+		fmt.Println()
+	}
+
+	// Usage
+	headerColor.Println("Usage:")
+	fmt.Printf("  %s\n\n", cmd.UseLine())
+
+	// Available Commands
+	if cmd.HasAvailableSubCommands() {
+		headerColor.Println("Available Commands:")
+		for _, subcmd := range cmd.Commands() {
+			if subcmd.IsAvailableCommand() {
+				cmdColor.Printf("  %-12s", subcmd.Name())
+				descColor.Printf("  %s\n", subcmd.Short)
+			}
+		}
+		fmt.Println()
+	}
+
+	// Flags
+	if cmd.HasAvailableFlags() {
+		headerColor.Println("Flags:")
+		cmd.Flags().VisitAll(func(f *pflag.Flag) {
+			if f.Hidden {
+				return
+			}
+			shorthand := ""
+			if f.Shorthand != "" {
+				shorthand = fmt.Sprintf("-%s, ", f.Shorthand)
+			}
+			flagColor.Printf("  %s--%s", shorthand, f.Name)
+			if f.Value.Type() != "bool" {
+				fmt.Printf(" %s", f.Value.Type())
+			}
+			descColor.Printf("\n        %s", f.Usage)
+			if f.DefValue != "" && f.DefValue != "false" {
+				fmt.Printf(" (default: %s)", f.DefValue)
+			}
+			fmt.Println()
+		})
+		fmt.Println()
+	}
+
+	// Footer
+	descColor.Printf("Use \"%s [command] --help\" for more information about a command.\n", cmd.Name())
 }
 
 // getConfigPath returns the path to the config file

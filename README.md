@@ -2,57 +2,46 @@
 
 通过 GitHub Release 下载软件包并管理更新，采用声明式配置文件实现状态管理。
 
+## 特性
+
+- 声明式配置 - TOML 格式，简单易用
+- 多种包格式 - 支持二进制、tar.gz、.deb/.rpm、AppImage
+- 交互式选择 - 可视化选择下载哪个 asset
+- 状态跟踪 - 自动记录安装版本和时间
+- 跨平台 - Linux、macOS、Windows
+
 ## 安装
 
 ```bash
 # 从源码构建
 git clone https://github.com/deca-org/deca.git
 cd deca
-go build -o deca .
+make build
+./deca init  # 初始化配置
+
+# 或全局安装
 sudo mv deca /usr/local/bin/
 ```
 
-## 使用方法
-
-### 配置文件
-
-创建 `~/.config/deca/deca.toml`：
-
-```toml
-bin_dir = "$HOME/.local/bin"
-
-[packages]
-# 简短格式：repo = "owner/repo"
-eza = "eza-community/eza"
-bat = "sharkdp/bat"
-
-# 完整格式：指定 asset、版本等
-zellij = { repo = "zellij-org/zellij", asset = "zellij.*x86_64" }
-neovim = { repo = "neovim/neovim", version = "0.9.5" }
-stern = { repo = "wercker/stern", os = "linux", arch = "amd64" }
-
-[settings]
-auto_update = true
-check_interval = "24h"
-```
-
-### 命令
+## 快速开始
 
 ```bash
-# 应用配置，安装/更新所有包
-deca apply
+# 初始化配置（自动检测系统信息）
+deca init
 
-# 添加新包（自动安装）
-deca add owner/repo
+# 添加并安装包
+deca add eza-community/eza
+deca add sharkdp/bat
 
-# 添加新包（不安装）
-deca add owner/repo --no-install
+# 交互式选择 asset
+deca add sourcegit-scm/sourcegit --interactive
 
-# 移除包
-deca remove package_name
+# 指定特定包格式
+deca add sourcegit-scm/sourcegit --asset "*.deb"
 
-# 列出已配置的包
+# 查看已安装的包
 deca list
+deca config show
 
 # 检查更新
 deca status
@@ -60,42 +49,60 @@ deca status
 # 更新所有包
 deca update
 
-# 更新指定包
-deca update package_name
-
 # 搜索包
 deca search fd
-
-# 健康检查
-deca doctor
 ```
 
-### 命令行参数
+## 配置文件
 
-| 参数 | 说明 |
+创建 `~/.config/deca/deca.toml`：
+
+```toml
+bin_dir = "$HOME/.local/bin"
+
+[packages]
+# 简短格式
+eza = "eza-community/eza"
+bat = "sharkdp/bat"
+
+# 完整格式
+zellij = { repo = "zellij-org/zellij", asset = "*.deb" }
+neovim = { repo = "neovim/neovim", version = "0.10.0" }
+
+[settings]
+auto_update = true
+check_interval = "24h"
+```
+
+## 命令
+
+| 命令 | 说明 |
 |------|------|
-| `--config` | 配置文件路径 |
-| `--dry-run` | 预览不执行 |
-| `-v, --verbose` | 详细输出 |
+| `deca init` | 初始化配置，检测系统信息 |
+| `deca apply` | 应用配置，安装/更新所有包 |
+| `deca add <owner/repo>` | 添加并安装包 |
+| `deca add <owner/repo> -i` | 交互式选择 asset |
+| `deca add <owner/repo> --asset "*.deb"` | 指定 asset 模式 |
+| `deca add <owner/repo> --no-install` | 仅添加配置 |
+| `deca remove <name>` | 移除包 |
+| `deca list` | 列出包和状态 |
+| `deca config show` | 显示配置和安装状态 |
+| `deca config` | 编辑配置文件 |
+| `deca status` | 检查更新 |
+| `deca update [name]` | 更新包 |
+| `deca search <query>` | 搜索 GitHub |
+| `deca doctor` | 健康检查 |
+| `deca --version` | 显示版本 |
 
-### add 命令参数
+## 支持的包格式
 
-| 参数 | 说明 |
-|------|------|
-| `-n, --name` | 包名（默认使用仓库名） |
-| `--asset` | Asset 匹配模式 |
-| `--os` | 目标操作系统 |
-| `--arch` | 目标架构 |
-| `--no-install` | 仅添加配置，不安装 |
-
-## Asset 匹配
-
-支持 glob 模式自动选择：
-
-- `zellij.*x86_64` → 匹配 `zellij-x86_64-unknown-linux-musl.tar.gz`
-- `*.tar.gz` → 匹配任意 tar.gz
-
-自动检测 OS/Arch 过滤。
+| 格式 | 处理方式 |
+|------|----------|
+| tar.gz/zip | 自动提取二进制 |
+| .deb | 通过 apt 安装（需要 sudo） |
+| .rpm | 通过 dnf/yum 安装（需要 sudo） |
+| AppImage | 直接复制，设置执行权限 |
+| 单文件二进制 | 直接复制 |
 
 ## 状态管理
 
@@ -106,27 +113,37 @@ deca doctor
   "packages": {
     "eza": {
       "repo": "eza-community/eza",
-      "version": "0.18.0",
+      "version": "v0.18.0",
+      "asset_name": "eza-x86_64-unknown-linux-musl.tar.gz",
       "installed_at": "2024-01-15T10:30:00Z"
     }
   }
 }
 ```
 
-## 跨平台支持
+## 路径说明
 
-| OS | bin_dir 默认值 |
-|----|----------------|
-| Linux | `$HOME/.local/bin` |
-| macOS | `$HOME/.local/bin` |
-| Windows | `%LOCALAPPDATA%\deca\bin` |
+| 类型 | Linux/macOS | Windows |
+|------|-------------|---------|
+| 配置 | `~/.config/deca/deca.toml` | `%APPDATA%\deca\deca.toml` |
+| 状态 | `~/.local/state/deca/state.json` | `%LOCALAPPDATA%\deca\state.json` |
+| 二进制 | `~/.local/bin` | `%LOCALAPPDATA%\deca\bin` |
 
 ## GitHub Token
 
-对于私有仓库或提高 API 限制，设置环境变量：
+对于私有仓库或提高 API 限制：
 
 ```bash
 export GITHUB_TOKEN="your_token_here"
+```
+
+## 构建
+
+```bash
+make build        # 构建（带版本信息）
+make test         # 运行测试
+make release      # 跨平台构建
+make clean        # 清理
 ```
 
 ## 项目结构
@@ -134,22 +151,24 @@ export GITHUB_TOKEN="your_token_here"
 ```
 deca/
 ├── cmd/              # CLI 命令
-│   ├── root.go       # 入口
+│   ├── root.go       # 入口、持久 flags
 │   ├── apply.go      # apply 命令
-│   ├── add.go        # add 命令
+│   ├── add.go        # add 命令（交互式选择）
 │   ├── remove.go     # remove 命令
 │   ├── list.go       # list 命令
 │   ├── status.go     # status 命令
 │   ├── update.go     # update 命令
 │   ├── search.go     # search 命令
-│   └── doctor.go     # doctor 命令
+│   ├── doctor.go     # doctor 命令
+│   ├── config.go     # config 子命令
+│   └── init.go       # init 命令
 ├── internal/
 │   ├── config/       # 配置解析
 │   ├── github/       # GitHub API
-│   ├── download/     # 下载和提取
-│   └── install/      # 安装逻辑
-├── main.go
-├── go.mod
+│   ├── download/     # 下载（进度条）
+│   ├── install/      # 安装（支持系统包）
+│   └── ui/           # UI（颜色、交互选择）
+├── Makefile          # 构建脚本
 └── README.md
 ```
 

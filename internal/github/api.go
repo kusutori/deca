@@ -234,12 +234,22 @@ func matchesOSArch(name string, os, arch string) bool {
 		osMatches := false
 		switch os {
 		case "linux":
-			osMatches = strings.Contains(nameLower, "linux") || !containsAny(nameLower, "darwin", "windows")
+			// Must contain "linux" OR (be an archive/binary without any OS indicator AND not contain other OS names)
+			// Explicit check: must have "linux" in name, or no OS indicator at all
+			if strings.Contains(nameLower, "linux") {
+				osMatches = true
+			} else if !containsAny(nameLower, "darwin", "macos", "windows", "freebsd", "openbsd", "netbsd", "dragonfly", "solaris", "illumos") {
+				// Only accept if it doesn't contain ANY known OS name
+				// This handles cases where binaries are named without OS suffix
+				osMatches = true
+			}
 		case "darwin", "macos":
-			osMatches = strings.Contains(nameLower, "darwin") || strings.Contains(nameLower, "macos")
+			osMatches = strings.Contains(nameLower, "darwin") || strings.Contains(nameLower, "macos") || strings.Contains(nameLower, "apple")
 		case "windows":
 			// Windows files may contain "windows" or end with ".exe"
 			osMatches = strings.Contains(nameLower, "windows") || strings.HasSuffix(nameLower, ".exe")
+		case "freebsd":
+			osMatches = strings.Contains(nameLower, "freebsd")
 		}
 		if !osMatches {
 			return false

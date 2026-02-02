@@ -56,50 +56,38 @@ func (i *Installer) Install(name string, release *github.ReleaseInfo, asset *git
 	if err != nil {
 		return nil, fmt.Errorf("failed to download: %w", err)
 	}
+	// Clean up temp directory after we're done
+	defer os.RemoveAll(result.TempDir)
 
-	// Find the binary
-	binaryPath := result.Path
-	if len(result.Files) > 1 {
-		// Try to find the binary
-		binaryName := filepath.Base(name)
-		if runtime.GOOS == "windows" {
-			binaryName += ".exe"
-		}
+	// Find the binary from extracted files
+	var binaryPath string
+	binaryName := name
+	if runtime.GOOS == "windows" {
+		binaryName += ".exe"
+	}
+
+	// For archives, result.Files contains the extracted file paths (relative to tempDir)
+	// For single binaries, result.Files contains the download path
+	if len(result.Files) > 0 {
+		// Try to find the binary by name first
 		found := download.FindBinary(result.Files, binaryName)
 		if found != "" {
-			binaryPath = filepath.Join(filepath.Dir(result.Path), found)
+			binaryPath = filepath.Join(result.TempDir, found)
+		} else {
+			// Use first file if no match found
+			binaryPath = filepath.Join(result.TempDir, result.Files[0])
 		}
+	} else {
+		// Fallback to downloaded path (shouldn't happen normally)
+		binaryPath = result.Path
 	}
 
-	// Get just the binary name
-	binaryName := filepath.Base(binaryPath)
-	finalPath := filepath.Join(i.BinDir, binaryName)
-
-	// Check if it's a directory (some archives have a top-level directory)
-	if len(result.Files) > 1 {
-		// Multiple files - might have a parent directory
-		firstFile := result.Files[0]
-		if strings.Contains(firstFile, "/") || strings.Contains(firstFile, "\\") {
-			parentDir := filepath.Dir(firstFile)
-			if parentDir != "." {
-				// Move all files from subdirectory
-				for _, f := range result.Files {
-					src := filepath.Join(filepath.Dir(result.Path), f)
-					dst := filepath.Join(i.BinDir, filepath.Base(f))
-					if err := copyFile(src, dst); err != nil {
-						return nil, fmt.Errorf("failed to copy %s: %w", f, err)
-					}
-				}
-				finalPath = filepath.Join(i.BinDir, binaryName)
-				return &InstallResult{
-					Name:       name,
-					Version:    release.TagName,
-					BinaryPath: finalPath,
-					AssetName:  asset.Name,
-				}, nil
-			}
-		}
+	// Get just the binary name for the final path
+	finalBinaryName := name
+	if runtime.GOOS == "windows" && !strings.HasSuffix(name, ".exe") {
+		finalBinaryName += ".exe"
 	}
+	finalPath := filepath.Join(i.BinDir, finalBinaryName)
 
 	// Copy binary to bin directory
 	if err := copyFile(binaryPath, finalPath); err != nil {

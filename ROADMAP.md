@@ -13,55 +13,64 @@ Deca 是一个声明式的 GitHub Release 包管理器，通过 TOML 配置文�
 - [x] **配置解析** - 支持 `bin_dir`、`[packages]`、`[settings]` 段落
 - [x] **状态管理** - JSON 格式记录已安装包信息
 - [x] **跨平台支持** - Linux、macOS、Windows
+- [x] **系统检测** - 自动检测 OS/Arch/发行版/包管理器
 
 ### GitHub 集成
 - [x] **Release 获取** - 获取最新 Release 信息
 - [x] **Asset 匹配** - 基于 OS/Arch 自动选择
 - [x] **Pattern 匹配** - 支持 glob 模式过滤
 - [x] **仓库搜索** - GitHub API 搜索仓库
+- [x] **Asset 优先级** - native > tar.gz > .deb > AppImage > .rpm
 
 ### 下载与安装
 - [x] **HTTP 下载** - 下载 Release Asset
+- [x] **下载进度条** - 可视化显示下载进度
 - [x] **tar.gz 提取** - 安全提取（路径遍历防护）
+- [x] **zip 提取** - 支持 zip 格式
 - [x] **二进制安装** - 复制到 bin_dir 并设置权限
+- [x] **AppImage 支持** - 直接复制，设置执行权限
+- [x] **系统包支持** - .deb (apt)、.rpm (dnf/yum) 需要 sudo
 - [x] **状态更新** - 安装后更新状态文件
 
 ### CLI 命令
 - [x] `deca apply` - 应用配置，安装/更新所有包
 - [x] `deca add` - 添加新包到配置
+- [x] `deca add -i/--interactive` - 交互式 asset 选择
+- [x] `deca add --asset` - 指定 asset 模式
 - [x] `deca remove` - 从配置移除包
 - [x] `deca list` - 列出已配置的包
 - [x] `deca status` - 检查更新
 - [x] `deca update` - 更新包到最新版本
 - [x] `deca search` - 搜索 GitHub 仓库
 - [x] `deca doctor` - 健康检查
+- [x] `deca init` - 初始化配置，检测系统信息
+- [x] `deca config` - 查看/编辑配置文件
+- [x] `deca --version` - 显示版本信息
 
-### 测试
+### UI/UX
+- [x] **彩色输出** - 不同类型信息使用不同颜色
+- [x] **进度条** - 下载进度可视化
+- [x] **交互式选择** - 数字选择 asset
+- [x] **版本信息** - git tags 作为版本号
+
+### 测试与质量
 - [x] **单元测试** - 所有核心包覆盖测试
 - [x] **安全测试** - tar 路径遍历防护测试
-
----
-
-## 开发中功能 🚧
-
-### 改进 Asset 提取
-- [ ] 支持 `.tar.xz` 格式
-- [ ] 支持 `.zip` 格式
-- [ ] 更好的目录结构处理（处理嵌套 bin 目录）
-- [ ] 校验和验证（SHA256/SHA512）
-
-### 用户体验
-- [ ] 交互式配置生成 (`deca init`)
-- [ ] 配置差异显示 (`deca diff`)
-- [ ] 下载进度条
-- [ ] 更友好的错误信息
+- [x] **Makefile** - 标准化构建流程
 
 ---
 
 ## 待开发功能 📋
 
+### 改进 Asset 提取
+- [ ] 支持 `.tar.xz` 格式
+- [ ] 校验和验证（SHA256/SHA512）
+
+### 用户体验
+- [ ] 配置差异显示 (`deca diff`)
+- [ ] 更友好的错误信息
+
 ### 配置增强
-- [ ] **多配置切换** - `deca switch <profile>` 支持多套配置
 - [ ] **版本锁定** - 指定固定版本安装
 - [ ] **条件匹配** - `os` / `arch` 条件表达式
 - [ ] **嵌套配置** - `[packages.github]` 分段组织
@@ -79,7 +88,7 @@ Deca 是一个声明式的 GitHub Release 包管理器，通过 TOML 配置文�
 
 ### 平台支持
 - [ ] **Homebrew 导入** - 从 Homebrew 迁移
-- [ ] **Scoop 导入** - 从 Scoop 迁移
+- [ ] **Scoop  Scoop 迁移导入** - 从
 - [ ] **插件系统** - 自定义安装逻辑
 
 ---
@@ -101,15 +110,19 @@ Deca 是一个声明式的 GitHub Release 包管理器，通过 TOML 配置文�
 
 ## 版本规划
 
-### v0.1.0 (当前)
+### v0.1.0 ✓ (当前)
 - [x] 基础功能可用
 - [x] 单元测试覆盖
 - [x] README 文档
+- [x] 系统包支持 (.deb/.rpm)
+- [x] 交互式 asset 选择
+- [x] 下载进度条
+- [x] init/config 命令
 
 ### v0.2.0 (短期)
-- [ ] 改进下载和提取逻辑
+- [ ] 改进下载和提取逻辑 (.tar.xz)
 - [ ] 更好的错误处理
-- [ ] 交互式命令
+- [ ] 配置 diff 功能
 
 ### v0.3.0 (中期)
 - [ ] 多配置支持
