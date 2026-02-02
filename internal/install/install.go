@@ -40,6 +40,11 @@ func (i *Installer) Install(name string, release *github.ReleaseInfo, asset *git
 		return nil, fmt.Errorf("failed to create bin directory: %w", err)
 	}
 
+	// Check if this is an AppImage (self-contained executable)
+	if strings.HasSuffix(strings.ToLower(asset.Name), ".appimage") {
+		return i.installAppImage(name, release, asset)
+	}
+
 	// Check if this is a system package (.deb, .rpm, etc.)
 	if pkgType := DetectPackageType(asset.Name); pkgType != "" {
 		// System package - download and install via package manager
@@ -104,6 +109,40 @@ func (i *Installer) Install(name string, release *github.ReleaseInfo, asset *git
 	// Make executable
 	if err := os.Chmod(finalPath, 0755); err != nil {
 		return nil, fmt.Errorf("failed to set permissions: %w", err)
+	}
+
+	return &InstallResult{
+		Name:       name,
+		Version:    release.TagName,
+		BinaryPath: finalPath,
+		AssetName:  asset.Name,
+	}, nil
+}
+
+// installAppImage handles AppImage installation (self-contained executable)
+func (i *Installer) installAppImage(name string, release *github.ReleaseInfo, asset *github.AssetInfo) (*InstallResult, error) {
+	// Create temp directory for download
+	tempDir, err := os.MkdirTemp("", "deca-*")
+	if err != nil {
+		return nil, fmt.Errorf("failed to create temp dir: %w", err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	// Download the AppImage
+	downloadPath := filepath.Join(tempDir, asset.Name)
+	if err := downloadFile(asset.DownloadURL, downloadPath); err != nil {
+		return nil, fmt.Errorf("failed to download %s: %w", asset.Name, err)
+	}
+
+	// AppImage needs to be executable
+	if err := os.Chmod(downloadPath, 0755); err != nil {
+		return nil, fmt.Errorf("failed to set executable permission: %w", err)
+	}
+
+	// Copy to bin directory
+	finalPath := filepath.Join(i.BinDir, name)
+	if err := copyFile(downloadPath, finalPath); err != nil {
+		return nil, fmt.Errorf("failed to copy AppImage: %w", err)
 	}
 
 	return &InstallResult{

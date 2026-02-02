@@ -143,11 +143,66 @@ func FindMatchingAsset(release *ReleaseInfo, pattern string, os, arch string) (*
 	}
 
 	if len(candidates) > 1 {
-		// Return first match (they're already OS/arch matched)
-		return candidates[0], nil
+		// Multiple matches - prefer native binaries over system packages
+		// Priority: binary > tar.gz/zip > AppImage > deb > rpm
+		best := selectBestAsset(candidates, os)
+		return best, nil
 	}
 
 	return candidates[0], nil
+}
+
+// selectBestAsset selects the best asset from multiple candidates
+// Priority: native binary > archive > deb > AppImage > rpm
+func selectBestAsset(candidates []*AssetInfo, os string) *AssetInfo {
+	// Priority order for package types
+	// Higher priority number = more preferred
+	priority := []struct {
+		suffixes []string
+		priority int
+	}{
+		// Native binaries (no archive, just the binary)
+		{[]string{}, 10},
+		// Archive formats (tar.gz, zip, etc.)
+		{[]string{".tar.gz", ".tgz", ".tar.xz", ".txz", ".zip"}, 8},
+		// Debian packages - prefer native package manager format
+		{[]string{".deb"}, 6},
+		// AppImage - portable but requires FUSE
+		{[]string{".appimage"}, 4},
+		// RPM packages - last resort on Debian/Ubuntu
+		{[]string{".rpm"}, 2},
+	}
+
+	for _, p := range priority {
+		for _, asset := range candidates {
+			for _, suffix := range p.suffixes {
+				if suffix == "" {
+					// No suffix - could be a native binary
+					// Accept if no known archive/package suffix
+					name := strings.ToLower(asset.Name)
+					if !hasArchiveSuffix(name) {
+						return asset
+					}
+				} else if strings.HasSuffix(strings.ToLower(asset.Name), suffix) {
+					return asset
+				}
+			}
+		}
+	}
+
+	// Fallback to first candidate
+	return candidates[0]
+}
+
+// hasArchiveSuffix checks if filename has archive/package suffix
+func hasArchiveSuffix(name string) bool {
+	archiveSuffixes := []string{".tar.gz", ".tgz", ".tar.xz", ".txz", ".zip", ".appimage", ".deb", ".rpm", ".exe"}
+	for _, suffix := range archiveSuffixes {
+		if strings.HasSuffix(name, suffix) {
+			return true
+		}
+	}
+	return false
 }
 
 // matchesAsset checks if an asset matches the given pattern
