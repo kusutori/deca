@@ -3,10 +3,13 @@ package install
 import (
 	"fmt"
 	"io"
+	"net/http"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strings"
+	"syscall"
 
 	"github.com/deca-org/deca/internal/download"
 	"github.com/deca-org/deca/internal/github"
@@ -37,7 +40,13 @@ func (i *Installer) Install(name string, release *github.ReleaseInfo, asset *git
 		return nil, fmt.Errorf("failed to create bin directory: %w", err)
 	}
 
-	// Download and extract
+	// Check if this is a system package (.deb, .rpm, etc.)
+	if pkgType := DetectPackageType(asset.Name); pkgType != "" {
+		// System package - download and install via package manager
+		return i.installSystemPackage(name, release, asset, pkgType)
+	}
+
+	// Regular binary package - download and extract
 	result, err := download.DownloadAndExtract(asset, runtime.GOOS, runtime.GOARCH)
 	if err != nil {
 		return nil, fmt.Errorf("failed to download: %w", err)
@@ -103,6 +112,86 @@ func (i *Installer) Install(name string, release *github.ReleaseInfo, asset *git
 		BinaryPath: finalPath,
 		AssetName:  asset.Name,
 	}, nil
+}
+
+// installSystemPackage handles system package installation (.deb, .rpm)
+func (i *Installer) installSystemPackage(name string, release *github.ReleaseInfo, asset *github.AssetInfo, pkgType string) (*InstallResult, error) {
+	// Download the package file
+	downloadPath := filepath.Join(i.BinDir, asset.Name)
+	if err := downloadFile(asset.DownloadURL, downloadPath); err != nil {
+		return nil, fmt.Errorf("failed to download %s: %w", asset.Name, err)
+	}
+
+	// Install via system package manager
+	var pkgManager string
+
+	switch pkgType {
+	case "deb":
+		pkgManager = "apt"
+	case "rpm":
+		if _, err := exec.LookPath("dnf"); err == nil {
+			pkgManager = "dnf"
+		} else {
+			pkgManager = "yum"
+		}
+	default:
+		return nil, fmt.Errorf("unsupported package type: %s", pkgType)
+	}
+
+	// Install the package with sudo
+	if syscall.Getuid() != 0 {
+		// Need sudo, check if cached
+		if !IsSudoCached() {
+			fmt.Printf("Installing %s requires sudo privileges.\n", name)
+		}
+		if err := SudoRun(pkgManager, append([]string{"install", "-y"}, downloadPath)...); err != nil {
+			// Clean up failed download
+			os.Remove(downloadPath)
+			return nil, fmt.Errorf("failed to install %s: %w", name, err)
+		}
+	} else {
+		// Running as root
+		cmd := exec.Command(pkgManager, "install", "-y", downloadPath)
+		cmd.Stdin = os.Stdin
+		cmd.Stdout = os.Stdout
+		cmd.Stderr = os.Stderr
+		if err := cmd.Run(); err != nil {
+			os.Remove(downloadPath)
+			return nil, fmt.Errorf("failed to install %s: %w", name, err)
+		}
+	}
+
+	// Remove the .deb/.rpm file after successful installation
+	os.Remove(downloadPath)
+
+	return &InstallResult{
+		Name:       name,
+		Version:    release.TagName,
+		BinaryPath: "", // System packages don't have a simple binary path
+		AssetName:  asset.Name,
+	}, nil
+}
+
+// downloadFile downloads a file from a URL (for system packages)
+func downloadFile(url, path string) error {
+	resp, err := http.Get(url)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("HTTP %d", resp.StatusCode)
+	}
+
+	out, err := os.Create(path)
+	if err != nil {
+		return err
+	}
+	defer out.Close()
+
+	_, err = io.Copy(out, resp.Body)
+	return err
 }
 
 // copyFile copies a file from src to dst

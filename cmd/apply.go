@@ -158,7 +158,16 @@ func installPackage(ctx context.Context, ghClient *github.Client, installer *ins
 		InstalledAt: time.Now(),
 	})
 
-	return fmt.Sprintf("%s v%s -> %s", name, installed.Version, result.BinaryPath), nil
+	// Format result message based on package type
+	oldVersion := strings.TrimPrefix(installed.Version, "v")
+	if oldVersion == "" {
+		oldVersion = "?"
+	}
+	if result.BinaryPath == "" {
+		// System package
+		return fmt.Sprintf("%s v%s (system package)", name, strings.TrimPrefix(release.TagName, "v")), nil
+	}
+	return fmt.Sprintf("%s v%s -> %s", name, oldVersion, result.BinaryPath), nil
 }
 
 func loadConfig() (*config.Config, error) {

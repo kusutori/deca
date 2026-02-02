@@ -9,8 +9,9 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// Version is set at build time
+// Version and Build are set at build time
 var Version = "dev"
+var Build = "unknown"
 
 // RootCmd is the root command
 var RootCmd = &cobra.Command{
@@ -27,7 +28,7 @@ Find more information at: https://github.com/deca-org/deca`,
 
 // Execute runs the root command
 func Execute() int {
-	RootCmd.Version = Version
+	RootCmd.Version = Version + " (build " + Build + ")"
 	if err := RootCmd.Execute(); err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		return 1

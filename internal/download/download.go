@@ -10,8 +10,11 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/deca-org/deca/internal/github"
+	"github.com/mattn/go-isatty"
+	"github.com/schollz/progressbar/v3"
 )
 
 // DownloadResult contains the result of a download operation
@@ -96,7 +99,40 @@ func downloadFile(url, path string) error {
 	}
 	defer out.Close()
 
-	_, err = io.Copy(out, resp.Body)
+	// Get content length for progress bar
+	contentLength := resp.ContentLength
+	filename := filepath.Base(path)
+
+	// Use progress bar if we know the size and output is to a terminal
+	var bar *progressbar.ProgressBar
+	if contentLength > 0 && isatty.IsTerminal(os.Stdout.Fd()) {
+		bar = progressbar.NewOptions64(contentLength,
+			progressbar.OptionSetDescription("Downloading "+filename),
+			progressbar.OptionSetWriter(os.Stdout),
+			progressbar.OptionShowBytes(true),
+			progressbar.OptionShowCount(),
+			progressbar.OptionThrottle(100*time.Millisecond),
+			progressbar.OptionOnCompletion(func() {
+				fmt.Fprint(os.Stdout, "\n")
+			}),
+		)
+	}
+
+	// Copy with progress
+	var writer io.Writer
+	if bar != nil {
+		writer = bar
+	} else {
+		writer = out
+	}
+
+	_, err = io.Copy(writer, resp.Body)
+
+	// Close progress bar if used
+	if bar != nil {
+		bar.Finish()
+	}
+
 	return err
 }
 
