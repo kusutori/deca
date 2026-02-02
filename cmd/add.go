@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"runtime"
+	"strings"
+	"time"
 
 	"github.com/deca-org/deca/internal/config"
 	"github.com/deca-org/deca/internal/github"
@@ -163,6 +165,24 @@ func doInstall(ctx context.Context, ghClient *github.Client, installer *install.
 		return fmt.Errorf("%s: failed to install: %w", name, err)
 	}
 
-	ui.Success.Printf("Installed %s v%s to %s\n", name, release.TagName, result.BinaryPath)
+	// Update state
+	statePath := config.DefaultStatePath()
+	state, err := config.LoadState(statePath)
+	if err == nil {
+		state.SetPackage(name, config.InstalledPackage{
+			Repo:        pkg.Repo,
+			Version:     release.TagName,
+			AssetName:   asset.Name,
+			InstalledAt: time.Now(),
+		})
+		state.SaveState(statePath)
+	}
+
+	// Print success message
+	if result.BinaryPath != "" {
+		ui.Success.Printf("Installed %s v%s to %s\n", name, strings.TrimPrefix(release.TagName, "v"), result.BinaryPath)
+	} else {
+		ui.Success.Printf("Installed %s v%s (system package)\n", name, strings.TrimPrefix(release.TagName, "v"))
+	}
 	return nil
 }
