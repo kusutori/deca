@@ -19,11 +19,15 @@ var AddCmd = &cobra.Command{
 	Long: `Add a package to the configuration and install it.
 
 This command adds a new package to the configuration file and
-optionally installs it immediately.`,
+optionally installs it immediately.
+
+Use --interactive to see all available assets and select one.
+Use --asset to specify which asset to download.`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		name, _ := cmd.Flags().GetString("name")
 		asset, _ := cmd.Flags().GetString("asset")
+		interactive, _ := cmd.Flags().GetBool("interactive")
 		osFlag, _ := cmd.Flags().GetString("os")
 		arch, _ := cmd.Flags().GetString("arch")
 		noInstall, _ := cmd.Flags().GetBool("no-install")
@@ -31,7 +35,7 @@ optionally installs it immediately.`,
 		repo := args[0]
 
 		// Validate repo format
-		_, repoName, err := github.ParseRepo(repo)
+		owner, repoName, err := github.ParseRepo(repo)
 		if err != nil {
 			return fmt.Errorf("invalid repo format: %w", err)
 		}
@@ -39,6 +43,17 @@ optionally installs it immediately.`,
 		// Use repo name as package name if not specified
 		if name == "" {
 			name = repoName
+		}
+
+		// If interactive mode, show all assets and let user select
+		if interactive {
+			selectedAsset, err := interactiveSelectAsset(owner, repoName)
+			if err != nil {
+				return fmt.Errorf("interactive selection failed: %w", err)
+			}
+			if selectedAsset != nil {
+				asset = selectedAsset.Name
+			}
 		}
 
 		// Load config
@@ -66,6 +81,9 @@ optionally installs it immediately.`,
 		}
 
 		ui.Success.Printf("Added %s -> %s\n", name, repo)
+		if asset != "" {
+			ui.SearchMeta.Printf("  Asset: %s\n", asset)
+		}
 
 		// Install if requested
 		if !noInstall {
@@ -79,11 +97,46 @@ optionally installs it immediately.`,
 
 func init() {
 	AddCmd.Flags().StringP("name", "n", "", "Package name (defaults to repo name)")
-	AddCmd.Flags().String("asset", "", "Asset pattern to match")
+	AddCmd.Flags().String("asset", "", "Asset pattern to match (e.g., '*.deb', '*linux*')")
+	AddCmd.Flags().BoolP("interactive", "i", false, "Interactive asset selection")
 	AddCmd.Flags().String("os", runtime.GOOS, "Target OS")
 	AddCmd.Flags().String("arch", runtime.GOARCH, "Target architecture")
 	AddCmd.Flags().Bool("no-install", false, "Don't install immediately")
 	RootCmd.AddCommand(AddCmd)
+}
+
+// interactiveSelectAsset shows all assets and lets user select one
+func interactiveSelectAsset(owner, repoName string) (*github.AssetInfo, error) {
+	ghClient := github.NewClient()
+	ctx := getContext()
+
+	// Get latest release
+	release, err := ghClient.GetLatestRelease(ctx, owner, repoName)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get release: %w", err)
+	}
+
+	// Print asset table
+	ui.PrintAssetTable(release.Assets, owner+"/"+repoName)
+
+	// Check if we should use interactive selection
+	if !ui.IsTerminal() {
+		ui.Info.Println("Non-interactive mode, using first asset")
+		if len(release.Assets) > 0 {
+			return &release.Assets[0], nil
+		}
+		return nil, nil
+	}
+
+	// Use interactive selector
+	fullName := owner + "/" + repoName
+	selected := ui.InteractiveSelectAssets(release.Assets, fullName)
+
+	if selected != nil && selected.Name != "" {
+		ui.Success.Printf("Selected: %s\n", selected.Name)
+	}
+
+	return selected, nil
 }
 
 func doInstall(ctx context.Context, ghClient *github.Client, installer *install.Installer, name string, pkg *config.Package) error {
