@@ -119,32 +119,31 @@ func ParseRepo(repo string) (owner, name string, err error) {
 
 // FindMatchingAsset finds an asset matching the given pattern
 func FindMatchingAsset(release *ReleaseInfo, pattern string, os, arch string) (*AssetInfo, error) {
-	if pattern == "" {
-		// Auto-detect based on OS/arch
-		pattern = guessAssetPattern(os, arch)
-	}
-
 	var candidates []*AssetInfo
 
 	for i := range release.Assets {
 		asset := &release.Assets[i]
-		if matchesAsset(asset, pattern, os, arch) {
-			candidates = append(candidates, asset)
+		// Check OS/arch match first (primary constraint)
+		if !matchesOSArch(asset.Name, os, arch) {
+			continue
 		}
+		// If pattern is specified, also check pattern match
+		if pattern != "" && !globMatch(pattern, asset.Name) {
+			continue
+		}
+		candidates = append(candidates, asset)
 	}
 
 	if len(candidates) == 0 {
+		// Provide helpful error message
+		if pattern == "" {
+			return nil, fmt.Errorf("no matching asset found for os=%s arch=%s", os, arch)
+		}
 		return nil, fmt.Errorf("no matching asset found for pattern: %s", pattern)
 	}
 
 	if len(candidates) > 1 {
-		// Prefer exact os/arch matches
-		for _, c := range candidates {
-			if matchesOSArch(c.Name, os, arch) {
-				return c, nil
-			}
-		}
-		// Return first match
+		// Return first match (they're already OS/arch matched)
 		return candidates[0], nil
 	}
 
@@ -153,13 +152,17 @@ func FindMatchingAsset(release *ReleaseInfo, pattern string, os, arch string) (*
 
 // matchesAsset checks if an asset matches the given pattern
 func matchesAsset(asset *AssetInfo, pattern string, os, arch string) bool {
-	// Check pattern match
+	// First check OS/arch match (this is the primary constraint)
+	if !matchesOSArch(asset.Name, os, arch) {
+		return false
+	}
+
+	// Then check pattern match if specified
 	if pattern != "" && !globMatch(pattern, asset.Name) {
 		return false
 	}
 
-	// Check OS/arch match
-	return matchesOSArch(asset.Name, os, arch)
+	return true
 }
 
 // matchesOSArch checks if the asset name matches the expected OS/arch
@@ -180,7 +183,8 @@ func matchesOSArch(name string, os, arch string) bool {
 		case "darwin", "macos":
 			osMatches = strings.Contains(nameLower, "darwin") || strings.Contains(nameLower, "macos")
 		case "windows":
-			osMatches = strings.Contains(nameLower, "windows") || strings.Contains(nameLower, ".exe")
+			// Windows files may contain "windows" or end with ".exe"
+			osMatches = strings.Contains(nameLower, "windows") || strings.HasSuffix(nameLower, ".exe")
 		}
 		if !osMatches {
 			return false
@@ -200,6 +204,18 @@ func matchesOSArch(name string, os, arch string) bool {
 		case "386", "i386":
 			archMatches = strings.Contains(nameLower, "386") || strings.Contains(nameLower, "i386")
 		}
+		// For Windows, if no arch is found in filename, still accept it
+		// Many Windows binaries don't include arch in the filename
+		if !archMatches && (os == "windows" || !strings.HasSuffix(nameLower, ".exe")) {
+			// On Windows, .exe files without arch are acceptable
+			// On other platforms, require arch match
+			if os != "windows" && strings.HasSuffix(nameLower, ".exe") {
+				return false
+			}
+			if os == "windows" && strings.HasSuffix(nameLower, ".exe") {
+				archMatches = true // Accept .exe files without explicit arch
+			}
+		}
 		if !archMatches {
 			return false
 		}
@@ -210,8 +226,9 @@ func matchesOSArch(name string, os, arch string) bool {
 
 // globMatch does simple glob pattern matching
 func globMatch(pattern, name string) bool {
-	// Convert glob pattern to regex
-	regexPattern := "^" + regexp.QuoteMeta(pattern) + "$"
+	// Convert glob pattern to regex - the pattern should be treated as a contains match
+	// not exact match, so we don't use ^ and $
+	regexPattern := regexp.QuoteMeta(pattern)
 
 	// Replace common glob wildcards
 	regexPattern = strings.ReplaceAll(regexPattern, `\*`, ".*")
@@ -232,6 +249,8 @@ func guessAssetPattern(os, arch string) string {
 		parts = append(parts, "darwin")
 	case "windows":
 		parts = append(parts, "windows")
+		// Windows binaries often don't include arch in filename
+		return strings.Join(parts, ".*")
 	}
 
 	switch arch {

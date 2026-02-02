@@ -113,7 +113,8 @@ func copyFile(src, dst string) error {
 	}
 	defer srcFile.Close()
 
-	if _, err := srcFile.Stat(); err != nil {
+	srcInfo, err := srcFile.Stat()
+	if err != nil {
 		return err
 	}
 
@@ -124,6 +125,11 @@ func copyFile(src, dst string) error {
 	defer dstFile.Close()
 
 	if _, err := io.Copy(dstFile, srcFile); err != nil {
+		return err
+	}
+
+	// Preserve permissions
+	if err := os.Chmod(dst, srcInfo.Mode()); err != nil {
 		return err
 	}
 

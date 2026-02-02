@@ -1,0 +1,193 @@
+package config
+
+import (
+	"os"
+	"path/filepath"
+	"testing"
+	"time"
+)
+
+func TestLoadState(t *testing.T) {
+	content := `{
+  "packages": {
+    "eza": {
+      "repo": "eza-community/eza",
+      "version": "v0.18.0",
+      "asset_name": "eza-x86_64-unknown-linux-musl.tar.gz",
+      "installed_at": "2024-01-15T10:30:00Z"
+    }
+  }
+}`
+	tmpDir := t.TempDir()
+	statePath := filepath.Join(tmpDir, "state.json")
+	if err := os.WriteFile(statePath, []byte(content), 0644); err != nil {
+		t.Fatalf("failed to write state: %v", err)
+	}
+
+	state, err := LoadState(statePath)
+	if err != nil {
+		t.Fatalf("failed to load state: %v", err)
+	}
+
+	if len(state.Packages) != 1 {
+		t.Errorf("expected 1 package, got %d", len(state.Packages))
+	}
+
+	pkg, ok := state.Packages["eza"]
+	if !ok {
+		t.Fatal("eza package not found")
+	}
+	if pkg.Repo != "eza-community/eza" {
+		t.Errorf("expected repo 'eza-community/eza', got '%s'", pkg.Repo)
+	}
+	if pkg.Version != "v0.18.0" {
+		t.Errorf("expected version 'v0.18.0', got '%s'", pkg.Version)
+	}
+}
+
+func TestLoadEmptyState(t *testing.T) {
+	tmpDir := t.TempDir()
+	statePath := filepath.Join(tmpDir, "state.json")
+
+	state, err := LoadState(statePath)
+	if err != nil {
+		t.Fatalf("failed to load state: %v", err)
+	}
+
+	if state.Packages == nil {
+		t.Error("expected non-nil packages map")
+	}
+	if len(state.Packages) != 0 {
+		t.Errorf("expected 0 packages, got %d", len(state.Packages))
+	}
+}
+
+func TestSaveState(t *testing.T) {
+	state := &State{
+		Packages: map[string]InstalledPackage{
+			"bat": {
+				Repo:        "sharkdp/bat",
+				Version:     "v0.24.0",
+				AssetName:   "bat-x86_64-unknown-linux-musl.tar.gz",
+				InstalledAt: time.Now(),
+			},
+		},
+	}
+
+	tmpDir := t.TempDir()
+	statePath := filepath.Join(tmpDir, "state.json")
+
+	if err := state.SaveState(statePath); err != nil {
+		t.Fatalf("failed to save state: %v", err)
+	}
+
+	// Verify file was created
+	if _, err := os.Stat(statePath); err != nil {
+		t.Fatalf("state file not created: %v", err)
+	}
+
+	// Load and verify
+	loaded, err := LoadState(statePath)
+	if err != nil {
+		t.Fatalf("failed to load saved state: %v", err)
+	}
+
+	pkg, ok := loaded.Packages["bat"]
+	if !ok {
+		t.Fatal("bat package not found in loaded state")
+	}
+	if pkg.Repo != "sharkdp/bat" {
+		t.Errorf("expected repo 'sharkdp/bat', got '%s'", pkg.Repo)
+	}
+}
+
+func TestSetPackage(t *testing.T) {
+	state := &State{
+		Packages: make(map[string]InstalledPackage),
+	}
+
+	state.SetPackage("eza", InstalledPackage{
+		Repo:    "eza-community/eza",
+		Version: "v0.18.0",
+	})
+
+	if len(state.Packages) != 1 {
+		t.Errorf("expected 1 package, got %d", len(state.Packages))
+	}
+
+	pkg, ok := state.Packages["eza"]
+	if !ok {
+		t.Fatal("eza package not found")
+	}
+	if pkg.Repo != "eza-community/eza" {
+		t.Errorf("expected repo 'eza-community/eza', got '%s'", pkg.Repo)
+	}
+
+	// Update
+	state.SetPackage("eza", InstalledPackage{
+		Repo:    "eza-community/eza",
+		Version: "v0.19.0",
+	})
+
+	if len(state.Packages) != 1 {
+		t.Errorf("expected 1 package after update, got %d", len(state.Packages))
+	}
+
+	pkg = state.Packages["eza"]
+	if pkg.Version != "v0.19.0" {
+		t.Errorf("expected version 'v0.19.0', got '%s'", pkg.Version)
+	}
+}
+
+func TestRemovePackage(t *testing.T) {
+	state := &State{
+		Packages: map[string]InstalledPackage{
+			"eza": {Repo: "eza-community/eza"},
+			"bat": {Repo: "sharkdp/bat"},
+		},
+	}
+
+	state.RemovePackage("eza")
+
+	if len(state.Packages) != 1 {
+		t.Errorf("expected 1 package after removal, got %d", len(state.Packages))
+	}
+
+	if _, ok := state.Packages["eza"]; ok {
+		t.Error("eza package should have been removed")
+	}
+
+	if _, ok := state.Packages["bat"]; !ok {
+		t.Error("bat package should still exist")
+	}
+}
+
+func TestGetPackage(t *testing.T) {
+	state := &State{
+		Packages: map[string]InstalledPackage{
+			"eza": {Repo: "eza-community/eza", Version: "v0.18.0"},
+		},
+	}
+
+	pkg, ok := state.GetPackage("eza")
+	if !ok {
+		t.Error("expected eza package to exist")
+	}
+	if pkg.Version != "v0.18.0" {
+		t.Errorf("expected version 'v0.18.0', got '%s'", pkg.Version)
+	}
+
+	_, ok = state.GetPackage("nonexistent")
+	if ok {
+		t.Error("expected nonexistent package to return false")
+	}
+}
+
+func TestDefaultStatePath(t *testing.T) {
+	home, _ := os.UserHomeDir()
+	expected := filepath.Join(home, ".local", "state", "deca", "state.json")
+
+	if path := DefaultStatePath(); path != expected {
+		t.Errorf("expected '%s', got '%s'", expected, path)
+	}
+}
