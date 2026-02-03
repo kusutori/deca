@@ -277,10 +277,39 @@ func downloadFileWithCache(url, path, repo, version, assetName string) error {
 		return err
 	}
 
+	// Verify checksum if available
+	if err := verifyChecksumIfAvailable(path, assetName); err != nil {
+		return err
+	}
+
 	// Cache the file
 	c := cache.NewCache()
 	c.EnsureDir()
 	c.Put(repo, version, assetName, path)
+
+	return nil
+}
+
+// verifyChecksumIfAvailable checks for a checksum file and verifies the download
+func verifyChecksumIfAvailable(filePath, assetName string) error {
+	checksumFile := FindChecksumFile(assetName)
+	if checksumFile == "" {
+		return nil // No checksum file found, skip verification
+	}
+
+	// Parse the checksum file
+	info, err := ParseChecksumFile(checksumFile, assetName)
+	if err != nil {
+		return nil // Skip verification if checksum not found for this file
+	}
+
+	// Verify the checksum
+	fmt.Fprintf(os.Stderr, "[cyan]Verifying checksum... [reset]")
+	if err := VerifyChecksum(filePath, info.Expected, info.Type); err != nil {
+		fmt.Fprintf(os.Stderr, "\n")
+		return fmt.Errorf("checksum verification failed: %w", err)
+	}
+	fmt.Fprintf(os.Stderr, "[green]OK[reset]\n")
 
 	return nil
 }
