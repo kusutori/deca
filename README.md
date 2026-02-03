@@ -8,6 +8,8 @@
 - 多种包格式 - 支持二进制、tar.gz、.deb/.rpm、AppImage
 - 交互式选择 - 可视化选择下载哪个 asset
 - 状态跟踪 - 自动记录安装版本和时间
+- 下载缓存 - 避免重复下载相同版本
+- 镜像支持 - 多个 GitHub 镜像源可选
 - 跨平台 - Linux、macOS、Windows
 - 彩色输出 - 清晰的命令帮助和状态显示
 
@@ -52,6 +54,15 @@ deca update
 
 # 搜索包
 deca search fd
+
+# 使用镜像加速（国内用户）
+deca mirror list
+deca mirror select
+
+# 查看和管理缓存
+deca cache
+deca cache list
+deca cache clean --orphans
 ```
 
 ## 配置文件
@@ -77,6 +88,8 @@ check_interval = "24h"
 
 ## 命令
 
+## 命令
+
 | 命令 | 说明 |
 |------|------|
 | `deca init` | 初始化配置，检测系统信息 |
@@ -95,6 +108,15 @@ check_interval = "24h"
 | `deca update [name]` | 更新包 |
 | `deca search <query>` | 搜索 GitHub |
 | `deca doctor` | 健康检查 |
+| `deca cache` | 显示缓存状态 |
+| `deca cache list` | 列出缓存文件 |
+| `deca cache size` | 显示缓存大小 |
+| `deca cache clean` | 清理缓存 |
+| `deca mirror` | 显示当前镜像源 |
+| `deca mirror list` | 列出可用镜像源 |
+| `deca mirror select` | 交互式选择镜像源 |
+| `deca mirror add <name> <url>` | 添加自定义镜像源 |
+| `deca mirror remove <name>` | 移除自定义镜像源 |
 | `deca --version` | 显示版本 |
 | `deca --dry-run` | 预览操作而不执行 |
 | `deca -v/--verbose` | 详细输出模式 |
@@ -108,6 +130,52 @@ check_interval = "24h"
 | .rpm | 通过 dnf/yum 安装（需要 sudo） |
 | AppImage | 直接复制，设置执行权限 |
 | 单文件二进制 | 直接复制 |
+
+## 下载缓存
+
+下载的文件会缓存到 `~/.cache/deca`，避免重复下载相同版本：
+
+```bash
+# 查看缓存状态
+deca cache
+
+# 列出缓存文件
+deca cache list
+
+# 显示缓存大小
+deca cache size
+
+# 清理未使用的缓存
+deca cache clean --orphans
+
+# 清理所有缓存
+deca cache clean --all
+```
+
+## 镜像源
+
+国内用户可以使用镜像源加速下载：
+
+```bash
+# 列出所有可用镜像
+deca mirror list
+
+# 交互式选择镜像
+deca mirror select
+
+# 查看当前镜像
+deca mirror
+
+# 添加自定义镜像
+deca mirror add "My Mirror" https://mirror.example.com
+```
+
+可用镜像：
+- GitHub (Official) - 官方源
+- GitHub Fast (China) - ghfast.top
+- GitHub Proxy (China) - github.moeyy.xyz
+- Jihulab (China) - jihulab.com
+- FastGit (China) - fastgit.org
 
 ## 状态管理
 
@@ -132,7 +200,9 @@ check_interval = "24h"
 |------|-------------|---------|
 | 配置 | `~/.config/deca/deca.toml` | `%APPDATA%\deca\deca.toml` |
 | 状态 | `~/.local/state/deca/state.json` | `%LOCALAPPDATA%\deca\state.json` |
+| 缓存 | `~/.cache/deca` | `%LOCALAPPDATA%\deca\cache` |
 | 二进制 | `~/.local/bin` | `%LOCALAPPDATA%\deca\bin` |
+| 镜像配置 | `~/.config/deca/mirrors.toml` | `%APPDATA%\deca\mirrors.toml` |
 
 ## 全局选项
 
@@ -174,12 +244,15 @@ deca/
 │   ├── search.go     # search 命令
 │   ├── doctor.go     # doctor 命令
 │   ├── config.go     # config 子命令
-│   └── init.go       # init 命令
+│   ├── init.go       # init 命令
+│   ├── cache.go      # cache 命令
+│   └── mirror.go     # mirror 命令
 ├── internal/
 │   ├── config/       # 配置解析
 │   ├── github/       # GitHub API
-│   ├── download/     # 下载（进度条）
+│   ├── download/     # 下载（进度条、缓存）
 │   ├── install/      # 安装（支持系统包）
+│   ├── cache/        # 缓存管理
 │   └── ui/           # UI（颜色、交互选择）
 ├── Makefile          # 构建脚本
 └── README.md
