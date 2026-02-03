@@ -10,6 +10,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/deca-org/deca/internal/config"
 	"github.com/google/go-github/v60/github"
 	"golang.org/x/sync/errgroup"
 )
@@ -86,9 +87,10 @@ func (c *Client) GetReleaseByTag(ctx context.Context, owner, repo, tag string) (
 func toReleaseInfo(release *github.RepositoryRelease, owner, repo string) *ReleaseInfo {
 	assets := make([]AssetInfo, len(release.Assets))
 	for i, asset := range release.Assets {
+		originalURL := asset.GetBrowserDownloadURL()
 		assets[i] = AssetInfo{
 			Name:        asset.GetName(),
-			DownloadURL: asset.GetBrowserDownloadURL(),
+			DownloadURL: TransformDownloadURL(originalURL, owner, repo, release.GetTagName()),
 			Size:        int64(asset.GetSize()),
 		}
 	}
@@ -106,6 +108,34 @@ func toReleaseInfo(release *github.RepositoryRelease, owner, repo string) *Relea
 		URL:       release.GetHTMLURL(),
 		Published: published,
 	}
+}
+
+// TransformDownloadURL transforms a download URL to use the current mirror
+func TransformDownloadURL(originalURL, owner, repo, tag string) string {
+	// Get current mirror
+	mirror := config.DefaultMirrorConfig().GetCurrentMirror()
+	if mirror == nil || mirror.Name == "GitHub (Official)" {
+		return originalURL
+	}
+
+	// Get the asset name from the URL
+	assetName := originalURL[strings.LastIndex(originalURL, "/")+1:]
+
+	// Build the new URL using the mirror's download pattern
+	downloadURL := mirror.DownloadURL
+	downloadURL = strings.ReplaceAll(downloadURL, "{owner}", owner)
+	downloadURL = strings.ReplaceAll(downloadURL, "{repo}", repo)
+	downloadURL = strings.ReplaceAll(downloadURL, "{tag}", tag)
+	downloadURL = strings.ReplaceAll(downloadURL, "{asset}", assetName)
+
+	return downloadURL
+}
+
+// GetAssetDownloadURL returns the download URL for an asset, potentially transformed for mirror
+func GetAssetDownloadURL(assetName, owner, repo, tag string) string {
+	// Build the original GitHub URL
+	originalURL := fmt.Sprintf("https://github.com/%s/%s/releases/download/%s/%s", owner, repo, tag, assetName)
+	return TransformDownloadURL(originalURL, owner, repo, tag)
 }
 
 // ParseRepo parses an owner/repo string
