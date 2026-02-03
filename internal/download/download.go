@@ -67,6 +67,10 @@ func DownloadAndExtractWithCache(asset *github.AssetInfo, targetOS, targetArch s
 		return nil, fmt.Errorf("failed to create temp dir: %w", err)
 	}
 
+	// Set asset digest for verification
+	SetAssetDigest(asset.Digest)
+	defer ClearAssetDigest()
+
 	// Download file
 	downloadPath := filepath.Join(tempDir, filepath.Base(asset.Name))
 	var usedCache bool
@@ -84,7 +88,7 @@ func DownloadAndExtractWithCache(asset *github.AssetInfo, targetOS, targetArch s
 
 		if !usedCache {
 			// Download and cache
-			if err := downloadFileWithCache(asset.DownloadURL, downloadPath, repo, version, asset.Name); err != nil {
+			if err := downloadFileWithCache(asset.DownloadURL, downloadPath, repo, version, asset.Name, asset.Digest); err != nil {
 				return nil, fmt.Errorf("failed to download %s: %w", asset.Name, err)
 			}
 		}
@@ -202,7 +206,11 @@ func downloadFile(url, path string) error {
 }
 
 // downloadFileWithCache downloads a file and caches it
-func downloadFileWithCache(url, path, repo, version, assetName string) error {
+func downloadFileWithCache(url, path, repo, version, assetName, digest string) error {
+	// Set the digest for verification
+	SetAssetDigest(digest)
+	defer ClearAssetDigest()
+
 	// Create temp file for download
 	tmpPath := path + ".tmp"
 
@@ -290,11 +298,24 @@ func downloadFileWithCache(url, path, repo, version, assetName string) error {
 	return nil
 }
 
-// verifyChecksumIfAvailable checks for a checksum file and verifies the download
+// verifyChecksumIfAvailable checks for checksum and verifies the download
+// Priority: GitHub API digest > local checksum file
 func verifyChecksumIfAvailable(filePath, assetName string) error {
+	// Try GitHub API digest first (new feature, preferred)
+	if assetDigest != "" {
+		fmt.Fprintf(os.Stderr, "[cyan]Verifying checksum (GitHub API)... [reset]")
+		if err := VerifyChecksum(filePath, assetDigest, ChecksumTypeSHA256); err != nil {
+			fmt.Fprintf(os.Stderr, "\n")
+			return fmt.Errorf("checksum verification failed: %w", err)
+		}
+		fmt.Fprintf(os.Stderr, "[green]OK[reset]\n")
+		return nil
+	}
+
+	// Fallback to local checksum file
 	checksumFile := FindChecksumFile(assetName)
 	if checksumFile == "" {
-		return nil // No checksum file found, skip verification
+		return nil // No checksum found, skip verification
 	}
 
 	// Parse the checksum file
@@ -312,6 +333,19 @@ func verifyChecksumIfAvailable(filePath, assetName string) error {
 	fmt.Fprintf(os.Stderr, "[green]OK[reset]\n")
 
 	return nil
+}
+
+// AssetDigest holds the SHA256 digest from GitHub API (set during download)
+var assetDigest string
+
+// SetAssetDigest sets the digest for the current download
+func SetAssetDigest(digest string) {
+	assetDigest = digest
+}
+
+// ClearAssetDigest clears the digest after verification
+func ClearAssetDigest() {
+	assetDigest = ""
 }
 
 // extractTarGz extracts a tar.gz archive

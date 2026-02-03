@@ -2,6 +2,7 @@ package github
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"os"
@@ -61,6 +62,7 @@ type AssetInfo struct {
 	Name        string `json:"name"`
 	DownloadURL string `json:"browser_download_url"`
 	Size        int64  `json:"size"`
+	Digest      string `json:"digest"` // SHA256 digest in format "sha256:..."
 }
 
 // GetLatestRelease returns the latest release for a repository
@@ -369,6 +371,43 @@ func containsAny(s string, subs ...string) bool {
 		}
 	}
 	return false
+}
+
+// GetAssetDigest fetches the SHA256 digest for a specific asset from GitHub API
+// Returns the digest in format "sha256:..." or empty string if not available
+func (c *Client) GetAssetDigest(ctx context.Context, owner, repo string, assetID int64) string {
+	apiURL := fmt.Sprintf("https://api.github.com/repos/%s/%s/releases/assets/%d", owner, repo, assetID)
+
+	req, err := http.NewRequestWithContext(ctx, "GET", apiURL, nil)
+	if err != nil {
+		return ""
+	}
+
+	// Accept header for release asset
+	req.Header.Set("Accept", "application/vnd.github+json")
+	if c.token != "" {
+		req.Header.Set("Authorization", "Bearer "+c.token)
+	}
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return ""
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return ""
+	}
+
+	// Parse the response to get the digest field
+	var result struct {
+		Digest string `json:"digest"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return ""
+	}
+
+	return result.Digest
 }
 
 // FetchMultipleReleases fetches releases for multiple repos in parallel
