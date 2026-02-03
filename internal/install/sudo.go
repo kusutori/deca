@@ -78,7 +78,6 @@ func (i *Installer) InstallSystemPackage(name string, assetName string, pkgType 
 	sudoArgs := append([]string{pkgManager}, installArgs...)
 	sudoCmd := exec.Command("sudo", sudoArgs...)
 	sudoCmd.Dir = i.BinDir
-	sudoCmd.Stdin = os.Stdin
 	sudoCmd.Stdout = os.Stdout
 	sudoCmd.Stderr = os.Stderr
 
@@ -179,7 +178,6 @@ func RunSudoCommand(cmd *exec.Cmd) error {
 	sudoArgs := append([]string{cmd.Args[0]}, cmd.Args[1:]...)
 	sudoCmd := exec.Command("sudo", sudoArgs...)
 	sudoCmd.Dir = cmd.Dir
-	sudoCmd.Stdin = os.Stdin
 	sudoCmd.Stdout = os.Stdout
 	sudoCmd.Stderr = os.Stderr
 
@@ -228,7 +226,6 @@ func PromptSudo(command string, args ...string) error {
 	sudoArgs := append([]string{"-S"}, fullArgs...)
 
 	cmd := exec.Command("sudo", sudoArgs...)
-	cmd.Stdin = os.Stdin
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 
@@ -303,7 +300,6 @@ func SudoRun(name string, args ...string) error {
 	sudoArgs := []string{"-S", name}
 	sudoArgs = append(sudoArgs, args...)
 	cmd := exec.Command("sudo", sudoArgs...)
-	cmd.Stdin = os.Stdin
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 

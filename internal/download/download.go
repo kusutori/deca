@@ -107,7 +107,7 @@ func downloadFile(url, path string) error {
 
 	// Use progress bar if we know the size and output is to a terminal
 	var bar *progressbar.ProgressBar
-	if contentLength > 0 && isatty.IsTerminal(os.Stdout.Fd()) {
+	if contentLength > 0 && isatty.IsTerminal(os.Stderr.Fd()) {
 		bar = progressbar.NewOptions64(contentLength,
 			progressbar.OptionSetDescription("Downloading "+filename),
 			progressbar.OptionSetWriter(os.Stderr),
