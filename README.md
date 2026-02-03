@@ -223,11 +223,35 @@ export GITHUB_TOKEN="your_token_here"
 ## 构建
 
 ```bash
-make build        # 构建（带版本信息）
-make test         # 运行测试
-make release      # 跨平台构建
-make clean        # 清理
+make build          # 构建（带版本信息）
+make test           # 运行测试
+make release        # 跨平台构建（动态链接）
+make static         # 静态链接构建（兼容旧系统）
+make musl-release   # musl 静态构建（推荐用于 Linux）
+make clean          # 清理
 ```
+
+### glibc 兼容性
+
+默认构建依赖 glibc 2.32+，可能无法在旧系统（如 Ubuntu 18.04、CentOS 7）上运行。
+
+**解决方案：**
+
+使用 musl 静态构建（推荐）：
+
+```bash
+# 安装 musl 工具链
+sudo apt install musl-tools
+
+# 构建静态链接版本
+make static
+```
+
+生成的静态二进制可以在几乎所有 Linux 发行版上运行，包括：
+- Ubuntu 14.04+
+- CentOS 7+
+- Debian 9+
+- Alpine Linux
 
 ## 项目结构
 
