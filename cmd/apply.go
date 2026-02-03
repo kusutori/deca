@@ -153,11 +153,12 @@ func installPackage(ctx context.Context, ghClient *github.Client, installer *ins
 
 	// Update state
 	state.SetPackage(name, config.InstalledPackage{
-		Repo:        pkg.Repo,
-		Version:     release.TagName,
-		AssetName:   asset.Name,
-		InstallType: result.InstallType,
-		InstalledAt: time.Now(),
+		Repo:          pkg.Repo,
+		Version:       release.TagName,
+		AssetName:     asset.Name,
+		InstallType:   result.InstallType,
+		InstalledAt:   time.Now(),
+		SystemPkgName: result.SystemPkgName,
 	})
 
 	// Format result message based on package type

@@ -55,7 +55,7 @@ file and uninstalls the installed binary or system package.`,
 		keepInstalled, _ := cmd.Flags().GetBool("keep-installed")
 		if !keepInstalled && installed {
 			installer := install.NewInstaller(cfg.BinDir)
-			err := installer.Uninstall(name, installedPkg.InstallType)
+			err := installer.Uninstall(name, installedPkg.InstallType, installedPkg.SystemPkgName)
 			if err != nil {
 				ui.Warning.Printf("Warning: failed to uninstall %s: %v\n", name, err)
 				ui.Info.Println("You may need to manually remove the package")

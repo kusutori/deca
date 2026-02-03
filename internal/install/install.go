@@ -28,11 +28,12 @@ func NewInstaller(binDir string) *Installer {
 
 // InstallResult contains the result of an installation
 type InstallResult struct {
-	Name        string
-	Version     string
-	BinaryPath  string
-	AssetName   string
-	InstallType config.InstallType
+	Name          string
+	Version       string
+	BinaryPath    string
+	AssetName     string
+	InstallType   config.InstallType
+	SystemPkgName string // Actual package name for system packages (e.g., "fresh-editor" from "fresh_0.1.98.deb")
 }
 
 // Install installs a package from a release
@@ -153,6 +154,18 @@ func (i *Installer) installSystemPackage(name string, release *github.ReleaseInf
 		return nil, fmt.Errorf("failed to download %s: %w", asset.Name, err)
 	}
 
+	// Extract actual package name from .deb file
+	var systemPkgName string
+	if pkgType == "deb" {
+		systemPkgName = extractDebPackageName(downloadPath)
+		if systemPkgName == "" {
+			// Fallback to using the asset name without version info
+			systemPkgName = name
+		}
+	} else {
+		systemPkgName = name
+	}
+
 	// Install via system package manager
 	var pkgManager string
 
@@ -196,12 +209,31 @@ func (i *Installer) installSystemPackage(name string, release *github.ReleaseInf
 	os.Remove(downloadPath)
 
 	return &InstallResult{
-		Name:        name,
-		Version:     release.TagName,
-		BinaryPath:  "", // System packages don't have a simple binary path
-		AssetName:   asset.Name,
-		InstallType: config.InstallTypeSystem,
+		Name:          name,
+		Version:       release.TagName,
+		BinaryPath:    "", // System packages don't have a simple binary path
+		AssetName:     asset.Name,
+		InstallType:   config.InstallTypeSystem,
+		SystemPkgName: systemPkgName,
 	}, nil
+}
+
+// extractDebPackageName extracts the actual package name from a .deb file
+func extractDebPackageName(debPath string) string {
+	// Use dpkg-deb to query the package name
+	cmd := exec.Command("dpkg-deb", "-f", debPath, "Package")
+	output, err := cmd.Output()
+	if err != nil {
+		// Fallback: try to parse from filename
+		// Format: package_version_architecture.deb
+		base := filepath.Base(debPath)
+		parts := strings.Split(base, "_")
+		if len(parts) > 0 {
+			return parts[0]
+		}
+		return ""
+	}
+	return strings.TrimSpace(string(output))
 }
 
 // downloadFile downloads a file from a URL (for system packages)
@@ -258,10 +290,10 @@ func copyFile(src, dst string) error {
 }
 
 // Uninstall removes a package based on its install type
-func (i *Installer) Uninstall(name string, installType config.InstallType) error {
+func (i *Installer) Uninstall(name string, installType config.InstallType, systemPkgName string) error {
 	switch installType {
 	case config.InstallTypeSystem:
-		return i.uninstallSystemPackage(name)
+		return i.uninstallSystemPackage(name, systemPkgName)
 	case config.InstallTypeAppImage:
 		return i.uninstallAppImage(name)
 	default:
@@ -301,10 +333,12 @@ func (i *Installer) uninstallAppImage(name string) error {
 }
 
 // uninstallSystemPackage removes a system package
-func (i *Installer) uninstallSystemPackage(name string) error {
-	// Detect package type from binary name
-	// Try to find the package name (usually matches the binary name)
-	pkgName := name
+func (i *Installer) uninstallSystemPackage(name, systemPkgName string) error {
+	// Use the actual system package name if available, otherwise fallback to name
+	pkgName := systemPkgName
+	if pkgName == "" {
+		pkgName = name
+	}
 
 	// Determine which package manager to use
 	var pkgManager string
@@ -321,7 +355,7 @@ func (i *Installer) uninstallSystemPackage(name string) error {
 	// Remove via system package manager
 	if syscall.Getuid() != 0 {
 		if !IsSudoCached() {
-			fmt.Printf("Removing %s requires sudo privileges.\n", name)
+			fmt.Printf("Removing %s (system package: %s) requires sudo privileges.\n", name, pkgName)
 		}
 		return SudoRun(pkgManager, "remove", "-y", pkgName)
 	}

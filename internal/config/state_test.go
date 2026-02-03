@@ -191,3 +191,80 @@ func TestDefaultStatePath(t *testing.T) {
 		t.Errorf("expected '%s', got '%s'", expected, path)
 	}
 }
+
+func TestStateWithSystemPkgName(t *testing.T) {
+	// Test that SystemPkgName is correctly saved and loaded
+	state := &State{
+		Packages: map[string]InstalledPackage{
+			"fresh": {
+				Repo:          "sinelaw/fresh",
+				Version:       "v0.1.98",
+				AssetName:     "fresh-editor_0.1.98-1_amd64.deb",
+				InstallType:   InstallTypeSystem,
+				SystemPkgName: "fresh-editor",
+				InstalledAt:   time.Now(),
+			},
+		},
+	}
+
+	tmpDir := t.TempDir()
+	statePath := filepath.Join(tmpDir, "state.json")
+
+	if err := state.SaveState(statePath); err != nil {
+		t.Fatalf("failed to save state: %v", err)
+	}
+
+	// Load and verify
+	loaded, err := LoadState(statePath)
+	if err != nil {
+		t.Fatalf("failed to load saved state: %v", err)
+	}
+
+	pkg, ok := loaded.Packages["fresh"]
+	if !ok {
+		t.Fatal("fresh package not found in loaded state")
+	}
+
+	if pkg.SystemPkgName != "fresh-editor" {
+		t.Errorf("expected SystemPkgName 'fresh-editor', got '%s'", pkg.SystemPkgName)
+	}
+
+	if pkg.InstallType != InstallTypeSystem {
+		t.Errorf("expected InstallType 'system', got '%s'", pkg.InstallType)
+	}
+}
+
+func TestLoadStateWithSystemPkgName(t *testing.T) {
+	// Test loading state from JSON that includes system_pkg_name
+	content := `{
+  "packages": {
+    "fresh": {
+      "repo": "sinelaw/fresh",
+      "version": "v0.1.98",
+      "asset_name": "fresh-editor_0.1.98-1_amd64.deb",
+      "install_type": "system",
+      "system_pkg_name": "fresh-editor",
+      "installed_at": "2024-01-15T10:30:00Z"
+    }
+  }
+}`
+	tmpDir := t.TempDir()
+	statePath := filepath.Join(tmpDir, "state.json")
+	if err := os.WriteFile(statePath, []byte(content), 0644); err != nil {
+		t.Fatalf("failed to write state: %v", err)
+	}
+
+	state, err := LoadState(statePath)
+	if err != nil {
+		t.Fatalf("failed to load state: %v", err)
+	}
+
+	pkg, ok := state.Packages["fresh"]
+	if !ok {
+		t.Fatal("fresh package not found")
+	}
+
+	if pkg.SystemPkgName != "fresh-editor" {
+		t.Errorf("expected SystemPkgName 'fresh-editor', got '%s'", pkg.SystemPkgName)
+	}
+}

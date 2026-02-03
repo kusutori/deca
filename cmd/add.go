@@ -170,11 +170,12 @@ func doInstall(ctx context.Context, ghClient *github.Client, installer *install.
 	state, err := config.LoadState(statePath)
 	if err == nil {
 		state.SetPackage(name, config.InstalledPackage{
-			Repo:        pkg.Repo,
-			Version:     release.TagName,
-			AssetName:   asset.Name,
-			InstallType: result.InstallType,
-			InstalledAt: time.Now(),
+			Repo:          pkg.Repo,
+			Version:       release.TagName,
+			AssetName:     asset.Name,
+			InstallType:   result.InstallType,
+			InstalledAt:   time.Now(),
+			SystemPkgName: result.SystemPkgName,
 		})
 		state.SaveState(statePath)
 	}

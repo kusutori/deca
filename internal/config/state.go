@@ -19,11 +19,12 @@ const (
 
 // InstalledPackage represents the state of an installed package
 type InstalledPackage struct {
-	Repo        string      `json:"repo"`
-	Version     string      `json:"version"`
-	AssetName   string      `json:"asset_name,omitempty"`
-	InstallType InstallType `json:"install_type"`
-	InstalledAt time.Time   `json:"installed_at"`
+	Repo          string      `json:"repo"`
+	Version       string      `json:"version"`
+	AssetName     string      `json:"asset_name,omitempty"`
+	InstallType   InstallType `json:"install_type"`
+	InstalledAt   time.Time   `json:"installed_at"`
+	SystemPkgName string      `json:"system_pkg_name,omitempty"` // Actual package name for system packages
 }
 
 // State represents the installation state
