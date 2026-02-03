@@ -63,6 +63,9 @@ type AssetInfo struct {
 	DownloadURL string `json:"browser_download_url"`
 	Size        int64  `json:"size"`
 	Digest      string `json:"digest"` // SHA256 digest in format "sha256:..."
+	// TODO: When go-github library is updated to include the 'digest' field,
+	// use asset.GetDigest() instead of the custom API call in GetAssetDigest.
+	// Tracking: https://github.com/google/go-github/issues/XXXX
 }
 
 // GetLatestRelease returns the latest release for a repository

@@ -90,3 +90,26 @@ Version info set at build time:
 ```bash
 ldflags = "-X github.com/deca-org/deca/cmd.Version=$(git describe --tags --always)"
 ```
+
+## Technical Debt & Known Issues
+
+### 1. go-github library missing 'digest' field (HIGH PRIORITY)
+**File**: `internal/github/api.go:60-67`
+
+GitHub added SHA256 digest support for release assets in June 2025. The `go-github/v60` library (v60.0.0) doesn't yet include the `digest` field in `ReleaseAsset`.
+
+**Current workaround**: Custom `GetAssetDigest()` function makes direct HTTP call to GitHub API.
+
+**Proper fix needed**: Update `go-github` to a version that includes the `digest` field and use `asset.GetDigest()` instead of the custom API call.
+
+**Tracking**: https://github.com/google/go-github/issues/XXXX
+
+### 2. Windows support incomplete
+- No native MSI/.exe silent install support
+- No Scoop/Chocolatey integration
+- Default bin_dir doesn't account for Windows paths
+
+### 3. Binary size optimization
+Static musl builds are ~15MB. Consider:
+- UPX compression for releases
+- Build with `-s -w` flags to strip debug info
