@@ -54,8 +54,8 @@ func (i *Installer) Install(name string, release *github.ReleaseInfo, asset *git
 		return i.installSystemPackage(name, release, asset, pkgType)
 	}
 
-	// Regular binary package - download and extract
-	result, err := download.DownloadAndExtract(asset, runtime.GOOS, runtime.GOARCH)
+	// Regular binary package - download and extract with caching
+	result, err := download.DownloadAndExtractWithCache(asset, runtime.GOOS, runtime.GOARCH, release.Owner+"/"+release.Repo, release.TagName)
 	if err != nil {
 		return nil, fmt.Errorf("failed to download: %w", err)
 	}

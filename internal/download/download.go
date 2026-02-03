@@ -12,11 +12,38 @@ import (
 	"strings"
 	"time"
 
+	"github.com/deca-org/deca/internal/cache"
 	"github.com/deca-org/deca/internal/github"
 	"github.com/mattn/go-isatty"
 	"github.com/schollz/progressbar/v3"
 	"github.com/ulikunitz/xz"
 )
+
+// copyFile copies a file from src to dst
+func copyFile(src, dst string) error {
+	srcFile, err := os.Open(src)
+	if err != nil {
+		return err
+	}
+	defer srcFile.Close()
+
+	srcInfo, err := srcFile.Stat()
+	if err != nil {
+		return err
+	}
+
+	dstFile, err := os.Create(dst)
+	if err != nil {
+		return err
+	}
+	defer dstFile.Close()
+
+	if _, err := io.Copy(dstFile, srcFile); err != nil {
+		return err
+	}
+
+	return dstFile.Chmod(srcInfo.Mode())
+}
 
 // DownloadResult contains the result of a download operation
 type DownloadResult struct {
@@ -29,6 +56,11 @@ type DownloadResult struct {
 
 // DownloadAndExtract downloads an asset and extracts it
 func DownloadAndExtract(asset *github.AssetInfo, targetOS, targetArch string) (*DownloadResult, error) {
+	return DownloadAndExtractWithCache(asset, targetOS, targetArch, "", "")
+}
+
+// DownloadAndExtractWithCache downloads an asset with optional caching
+func DownloadAndExtractWithCache(asset *github.AssetInfo, targetOS, targetArch string, repo, version string) (*DownloadResult, error) {
 	// Create temp directory - caller must clean up via result.TempDir
 	tempDir, err := os.MkdirTemp("", "deca-*")
 	if err != nil {
@@ -37,8 +69,29 @@ func DownloadAndExtract(asset *github.AssetInfo, targetOS, targetArch string) (*
 
 	// Download file
 	downloadPath := filepath.Join(tempDir, filepath.Base(asset.Name))
-	if err := downloadFile(asset.DownloadURL, downloadPath); err != nil {
-		return nil, fmt.Errorf("failed to download %s: %w", asset.Name, err)
+	var usedCache bool
+
+	// Try to use cache if repo and version are provided
+	if repo != "" && version != "" {
+		c := cache.NewCache()
+		cachedPath := c.Get(repo, version, asset.Name)
+		if cachedPath != "" {
+			// Copy from cache to temp dir
+			if err := copyFile(cachedPath, downloadPath); err == nil {
+				usedCache = true
+			}
+		}
+
+		if !usedCache {
+			// Download and cache
+			if err := downloadFileWithCache(asset.DownloadURL, downloadPath, repo, version, asset.Name); err != nil {
+				return nil, fmt.Errorf("failed to download %s: %w", asset.Name, err)
+			}
+		}
+	} else {
+		if err := downloadFile(asset.DownloadURL, downloadPath); err != nil {
+			return nil, fmt.Errorf("failed to download %s: %w", asset.Name, err)
+		}
 	}
 
 	// Extract based on file type
@@ -146,6 +199,90 @@ func downloadFile(url, path string) error {
 	}
 
 	return err
+}
+
+// downloadFileWithCache downloads a file and caches it
+func downloadFileWithCache(url, path, repo, version, assetName string) error {
+	// Create temp file for download
+	tmpPath := path + ".tmp"
+
+	resp, err := http.Get(url)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("HTTP %d", resp.StatusCode)
+	}
+
+	out, err := os.Create(tmpPath)
+	if err != nil {
+		return err
+	}
+	defer out.Close()
+
+	// Get content length for progress bar
+	contentLength := resp.ContentLength
+	filename := filepath.Base(path)
+
+	// Use progress bar if we know the size and output is to a terminal
+	var bar *progressbar.ProgressBar
+	if contentLength > 0 && isatty.IsTerminal(os.Stderr.Fd()) {
+		bar = progressbar.NewOptions64(contentLength,
+			progressbar.OptionSetDescription("Downloading "+filename),
+			progressbar.OptionSetWriter(os.Stderr),
+			progressbar.OptionShowBytes(true),
+			progressbar.OptionShowCount(),
+			progressbar.OptionSetWidth(40),
+			progressbar.OptionThrottle(65*time.Millisecond),
+			progressbar.OptionSpinnerType(14),
+			progressbar.OptionFullWidth(),
+			progressbar.OptionSetRenderBlankState(true),
+			progressbar.OptionClearOnFinish(),
+			progressbar.OptionEnableColorCodes(true),
+			progressbar.OptionSetTheme(progressbar.Theme{
+				Saucer:        "[cyan]=[reset]",
+				SaucerHead:    "[cyan]>[reset]",
+				SaucerPadding: " ",
+				BarStart:      "[",
+				BarEnd:        "]",
+			}),
+			progressbar.OptionOnCompletion(func() {
+				fmt.Fprint(os.Stderr, "\n")
+			}),
+		)
+	}
+
+	// Copy with progress
+	if bar != nil {
+		_, err = io.Copy(io.MultiWriter(out, bar), resp.Body)
+	} else {
+		_, err = io.Copy(out, resp.Body)
+	}
+
+	// Close progress bar if used
+	if bar != nil {
+		bar.Finish()
+	}
+
+	if err != nil {
+		os.Remove(tmpPath)
+		return err
+	}
+
+	// Rename to final path
+	if err := os.Rename(tmpPath, path); err != nil {
+		os.Remove(tmpPath)
+		return err
+	}
+
+	// Cache the file
+	c := cache.NewCache()
+	c.EnsureDir()
+	c.Put(repo, version, assetName, path)
+
+	return nil
 }
 
 // extractTarGz extracts a tar.gz archive
