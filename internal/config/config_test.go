@@ -45,6 +45,8 @@ bat = "sharkdp/bat"
 func TestLoadFullConfig(t *testing.T) {
 	content := `
 bin_dir = "/usr/local/bin"
+os = "linux"
+arch = "amd64"
 
 [packages]
 zellij = { repo = "zellij-org/zellij", asset = "zellij.*x86_64" }
@@ -53,6 +55,13 @@ neovim = { repo = "neovim/neovim", version = "0.9.5", os = "linux", arch = "amd6
 [settings]
 auto_update = true
 check_interval = "24h"
+
+[system_info]
+os = "linux"
+arch = "amd64"
+distribution = "ubuntu"
+package_manager = "apt"
+bin_dir = "/usr/local/bin"
 `
 	tmpDir := t.TempDir()
 	configPath := filepath.Join(tmpDir, "deca.toml")
@@ -75,6 +84,16 @@ check_interval = "24h"
 
 	if cfg.Settings.CheckInterval != "24h" {
 		t.Errorf("expected check_interval '24h', got '%s'", cfg.Settings.CheckInterval)
+	}
+
+	if cfg.SystemInfo == nil {
+		t.Fatal("expected system_info to be loaded")
+	}
+	if cfg.SystemInfo.Distribution != "ubuntu" {
+		t.Errorf("expected system_info distribution 'ubuntu', got '%s'", cfg.SystemInfo.Distribution)
+	}
+	if cfg.SystemInfo.PackageManager != "apt" {
+		t.Errorf("expected system_info package_manager 'apt', got '%s'", cfg.SystemInfo.PackageManager)
 	}
 
 	zellij, ok := cfg.Packages["zellij"]

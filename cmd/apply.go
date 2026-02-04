@@ -119,7 +119,7 @@ func installPackage(ctx context.Context, ghClient *github.Client, installer *ins
 
 	// Get latest release
 	printStatus(fmt.Sprintf("Fetching %s...", name))
-	release, err := ghClient.GetLatestRelease(ctx, owner, repo)
+	release, err := releaseForPackage(ctx, ghClient, owner, repo, pkg)
 	if err != nil {
 		return "", decaerrors.NewGitHubAPIError(
 			fmt.Errorf("%s: failed to fetch release: %w", name, err),

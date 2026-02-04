@@ -102,7 +102,7 @@ func checkUpdate(ctx context.Context, ghClient *github.Client, name string, pkg 
 		return false, fmt.Errorf("%s: invalid repo: %w", name, err)
 	}
 
-	release, err := ghClient.GetLatestRelease(ctx, owner, repo)
+	release, err := releaseForPackage(ctx, ghClient, owner, repo, pkg)
 	if err != nil {
 		return false, fmt.Errorf("%s: %w", name, err)
 	}

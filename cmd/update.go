@@ -64,8 +64,8 @@ With a name, updates only that specific package.`,
 				return fmt.Errorf("%s: invalid repo: %w", name, err)
 			}
 
-			// Get latest release
-			release, err := ghClient.GetLatestRelease(ctx, owner, repo)
+			// Get desired release (latest or pinned)
+			release, err := releaseForPackage(ctx, ghClient, owner, repo, &pkg)
 			if err != nil {
 				return fmt.Errorf("%s: failed to fetch release: %w", name, err)
 			}
@@ -98,10 +98,12 @@ With a name, updates only that specific package.`,
 
 			// Update state
 			state.SetPackage(name, config.InstalledPackage{
-				Repo:        pkg.Repo,
-				Version:     release.TagName,
-				AssetName:   asset.Name,
-				InstalledAt: time.Now(),
+				Repo:          pkg.Repo,
+				Version:       release.TagName,
+				AssetName:     result.AssetName,
+				InstallType:   result.InstallType,
+				InstalledAt:   time.Now(),
+				SystemPkgName: result.SystemPkgName,
 			})
 
 			ui.Success.Printf("Updated %s to v%s\n", name, release.TagName)

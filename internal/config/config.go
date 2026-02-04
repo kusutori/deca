@@ -51,21 +51,21 @@ func DefaultBinDir() string {
 
 // Config represents the main configuration file
 type Config struct {
-	BinDir    string              `toml:"bin_dir"`
-	OS        string              `toml:"os"`
-	Arch      string              `toml:"arch"`
-	Packages  map[string]Package  `toml:"packages"`
-	Settings  Settings            `toml:"settings"`
+	BinDir     string             `toml:"bin_dir"`
+	OS         string             `toml:"os"`
+	Arch       string             `toml:"arch"`
+	Packages   map[string]Package `toml:"packages"`
+	Settings   Settings           `toml:"settings"`
 	SystemInfo *SystemInfo        `toml:"system_info"`
 }
 
 // SystemInfo stores detected system information
 type SystemInfo struct {
-	OS            string `toml:"os"`
-	Arch          string `toml:"arch"`
-	Distribution  string `toml:"distribution"`
+	OS             string `toml:"os"`
+	Arch           string `toml:"arch"`
+	Distribution   string `toml:"distribution"`
 	PackageManager string `toml:"package_manager"`
-	BinDir        string `toml:"bin_dir"`
+	BinDir         string `toml:"bin_dir"`
 }
 
 // Package represents a single package configuration
@@ -162,6 +162,17 @@ func Load(path string) (*Config, error) {
 		}
 	}
 
+	// Parse system_info
+	if systemInfo, ok := generic["system_info"].(map[string]interface{}); ok {
+		cfg.SystemInfo = &SystemInfo{
+			OS:             getString(systemInfo, "os"),
+			Arch:           getString(systemInfo, "arch"),
+			Distribution:   getString(systemInfo, "distribution"),
+			PackageManager: getString(systemInfo, "package_manager"),
+			BinDir:         getString(systemInfo, "bin_dir"),
+		}
+	}
+
 	return cfg, nil
 }
 
@@ -172,6 +183,15 @@ func getBool(m map[string]interface{}, key string) bool {
 		}
 	}
 	return false
+}
+
+func getString(m map[string]interface{}, key string) string {
+	if v, ok := m[key]; ok {
+		if s, ok := v.(string); ok {
+			return s
+		}
+	}
+	return ""
 }
 
 // LoadDefault loads the default configuration file
