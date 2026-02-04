@@ -1,6 +1,7 @@
 package install
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -303,5 +304,64 @@ func TestUninstallSystemPackageWithName(t *testing.T) {
 	_ = func() {
 		installer.Uninstall("test", config.InstallTypeSystem, "actual-pkg-name")
 		installer.Uninstall("test", config.InstallTypeBinary, "")
+	}
+}
+
+func TestInstallAppImage_UsesDownloadFile(t *testing.T) {
+	tmpDir := t.TempDir()
+	installer := NewInstaller(tmpDir)
+
+	orig := downloadFileFunc
+	t.Cleanup(func() { downloadFileFunc = orig })
+	downloadFileFunc = func(url, path string) error {
+		return os.WriteFile(path, []byte("appimage"), 0755)
+	}
+
+	release := &github.ReleaseInfo{
+		TagName: "v1.0.0",
+		Owner:   "owner",
+		Repo:    "repo",
+	}
+	asset := &github.AssetInfo{
+		Name:        "tool.AppImage",
+		DownloadURL: "http://example.com/tool.AppImage",
+	}
+
+	result, err := installer.Install("tool", release, asset)
+	if err != nil {
+		t.Fatalf("install appimage failed: %v", err)
+	}
+	if result.InstallType != config.InstallTypeAppImage {
+		t.Fatalf("expected appimage install type, got %s", result.InstallType)
+	}
+	if result.BinaryPath == "" {
+		t.Fatal("expected binary path to be set")
+	}
+}
+
+func TestInstallSystemPackage_UsesDownloadFile(t *testing.T) {
+	tmpDir := t.TempDir()
+	installer := NewInstaller(tmpDir)
+
+	sentinel := errors.New("download failed")
+	orig := downloadFileFunc
+	t.Cleanup(func() { downloadFileFunc = orig })
+	downloadFileFunc = func(url, path string) error {
+		return sentinel
+	}
+
+	release := &github.ReleaseInfo{
+		TagName: "v1.0.0",
+		Owner:   "owner",
+		Repo:    "repo",
+	}
+	asset := &github.AssetInfo{
+		Name:        "tool_1.0.0_amd64.deb",
+		DownloadURL: "http://example.com/tool.deb",
+	}
+
+	_, err := installer.installSystemPackage("tool", release, asset, "deb")
+	if !errors.Is(err, sentinel) {
+		t.Fatalf("expected download error, got %v", err)
 	}
 }

@@ -15,6 +15,8 @@ import (
 	"github.com/deca-org/deca/internal/github"
 )
 
+var downloadFileFunc = download.DownloadFile
+
 // Installer handles installation of binaries
 type Installer struct {
 	BinDir string
@@ -121,7 +123,7 @@ func (i *Installer) installAppImage(name string, release *github.ReleaseInfo, as
 
 	// Download the AppImage
 	downloadPath := filepath.Join(tempDir, asset.Name)
-	if err := download.DownloadFile(asset.DownloadURL, downloadPath); err != nil {
+	if err := downloadFileFunc(asset.DownloadURL, downloadPath); err != nil {
 		return nil, fmt.Errorf("failed to download %s: %w", asset.Name, err)
 	}
 
@@ -149,7 +151,7 @@ func (i *Installer) installAppImage(name string, release *github.ReleaseInfo, as
 func (i *Installer) installSystemPackage(name string, release *github.ReleaseInfo, asset *github.AssetInfo, pkgType string) (*InstallResult, error) {
 	// Download the package file
 	downloadPath := filepath.Join(i.BinDir, asset.Name)
-	if err := download.DownloadFile(asset.DownloadURL, downloadPath); err != nil {
+	if err := downloadFileFunc(asset.DownloadURL, downloadPath); err != nil {
 		return nil, fmt.Errorf("failed to download %s: %w", asset.Name, err)
 	}
 
