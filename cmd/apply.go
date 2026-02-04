@@ -58,14 +58,16 @@ are installed with the specified versions.`,
 		// Process packages
 		g, ctx := errgroup.WithContext(ctx)
 
+		runtimeOS := cfg.OS
+		runtimeArch := cfg.Arch
 		for name, pkg := range cfg.Packages {
 			name, pkg := name, pkg
 			g.Go(func() error {
-				result, err := installPackage(ctx, ghClient, installer, name, &pkg, state)
+				result, err := installPackage(ctx, ghClient, installer, name, &pkg, state, runtimeOS, runtimeArch)
 				m.Lock()
 				if err != nil {
 					errs = append(errs, err)
-				} else {
+				} else if result != "" {
 					results = append(results, result)
 				}
 				m.Unlock()
@@ -111,7 +113,18 @@ func init() {
 	RootCmd.AddCommand(ApplyCmd)
 }
 
-func installPackage(ctx context.Context, ghClient *github.Client, installer *install.Installer, name string, pkg *config.Package, state *config.State) (string, error) {
+func installPackage(ctx context.Context, ghClient *github.Client, installer *install.Installer, name string, pkg *config.Package, state *config.State, runtimeOS, runtimeArch string) (string, error) {
+	ok, targetOS, targetArch, err := config.PackageMatches(pkg, runtimeOS, runtimeArch)
+	if err != nil {
+		return "", decaerrors.NewDecaError(decaerrors.ErrCodeConfigInvalid, "invalid os/arch condition").WithParent(err)
+	}
+	if !ok {
+		if verbose {
+			ui.Info.Printf("%s: skipped (os/arch condition)\n", name)
+		}
+		return "", nil
+	}
+
 	owner, repo, err := github.ParseRepo(pkg.Repo)
 	if err != nil {
 		return "", decaerrors.NewPackageNotFoundError(name).WithParent(err)
@@ -127,7 +140,7 @@ func installPackage(ctx context.Context, ghClient *github.Client, installer *ins
 	}
 
 	// Find matching asset
-	asset, err := github.FindMatchingAsset(release, pkg.Asset, pkg.OS, pkg.Arch)
+	asset, err := github.FindMatchingAsset(release, pkg.Asset, targetOS, targetArch)
 	if err != nil {
 		return "", decaerrors.NewAssetNotFoundError(pkg.OS, pkg.Arch, pkg.Asset).WithParent(err)
 	}
@@ -144,11 +157,31 @@ func installPackage(ctx context.Context, ghClient *github.Client, installer *ins
 		return fmt.Sprintf("%s v%s (up to date)", name, newVersion), nil
 	}
 
-	// Install
+	// Install with rollback support
+	var backupPath string
+	var targetPath string
+	if exists && installed.InstallType != config.InstallTypeSystem {
+		targetPath = install.BinaryPath(installer.BinDir, name, installed.InstallType)
+		if targetPath != "" {
+			if _, err := os.Stat(targetPath); err == nil {
+				backupPath, err = install.BackupFile(targetPath)
+				if err != nil {
+					return "", decaerrors.NewInstallError(name, err)
+				}
+			}
+		}
+	}
+
 	printStatus(fmt.Sprintf("Installing %s v%s...", name, release.TagName))
 	result, err := installer.Install(name, release, asset)
 	if err != nil {
+		if backupPath != "" {
+			_ = install.RestoreFile(backupPath, targetPath)
+		}
 		return "", decaerrors.NewInstallError(name, err)
+	}
+	if backupPath != "" {
+		_ = install.RemoveBackup(backupPath)
 	}
 
 	// Update state

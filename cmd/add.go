@@ -70,10 +70,10 @@ Use --asset to specify which asset to download.`,
 		}
 
 		cfg.Packages[name] = config.Package{
-			Repo:    repo,
-			Asset:   asset,
-			OS:      osFlag,
-			Arch:    arch,
+			Repo:  repo,
+			Asset: asset,
+			OS:    osFlag,
+			Arch:  arch,
 		}
 
 		// Save config
@@ -142,6 +142,15 @@ func interactiveSelectAsset(owner, repoName string) (*github.AssetInfo, error) {
 }
 
 func doInstall(ctx context.Context, ghClient *github.Client, installer *install.Installer, name string, pkg *config.Package) error {
+	ok, targetOS, targetArch, err := config.PackageMatches(pkg, runtime.GOOS, runtime.GOARCH)
+	if err != nil {
+		return fmt.Errorf("%s: invalid condition: %w", name, err)
+	}
+	if !ok {
+		ui.Warning.Printf("%s skipped: os/arch condition not met\n", name)
+		return nil
+	}
+
 	owner, repo, err := github.ParseRepo(pkg.Repo)
 	if err != nil {
 		return fmt.Errorf("%s: invalid repo: %w", name, err)
@@ -154,7 +163,7 @@ func doInstall(ctx context.Context, ghClient *github.Client, installer *install.
 	}
 
 	// Find matching asset
-	asset, err := github.FindMatchingAsset(release, pkg.Asset, pkg.OS, pkg.Arch)
+	asset, err := github.FindMatchingAsset(release, pkg.Asset, targetOS, targetArch)
 	if err != nil {
 		return fmt.Errorf("%s: no matching asset: %w", name, err)
 	}

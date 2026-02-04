@@ -50,10 +50,12 @@ your installed packages are available.`,
 		g, ctx := errgroup.WithContext(ctx)
 		var mu sync.Mutex
 
+		runtimeOS := cfg.OS
+		runtimeArch := cfg.Arch
 		for name, pkg := range cfg.Packages {
 			name, pkg := name, pkg
 			g.Go(func() error {
-				hasUpdate, err := checkUpdate(ctx, ghClient, name, &pkg, state)
+				hasUpdate, err := checkUpdate(ctx, ghClient, name, &pkg, state, runtimeOS, runtimeArch)
 				mu.Lock()
 				if err != nil {
 					errors = append(errors, err)
@@ -96,7 +98,18 @@ func init() {
 	RootCmd.AddCommand(StatusCmd)
 }
 
-func checkUpdate(ctx context.Context, ghClient *github.Client, name string, pkg *config.Package, state *config.State) (bool, error) {
+func checkUpdate(ctx context.Context, ghClient *github.Client, name string, pkg *config.Package, state *config.State, runtimeOS, runtimeArch string) (bool, error) {
+	ok, _, _, err := config.PackageMatches(pkg, runtimeOS, runtimeArch)
+	if err != nil {
+		return false, fmt.Errorf("%s: invalid condition: %w", name, err)
+	}
+	if !ok {
+		if verbose {
+			ui.Info.Printf("%s: skipped (os/arch condition)\n", name)
+		}
+		return false, nil
+	}
+
 	owner, repo, err := github.ParseRepo(pkg.Repo)
 	if err != nil {
 		return false, fmt.Errorf("%s: invalid repo: %w", name, err)

@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"fmt"
+	"os"
 	"strings"
 	"time"
 
@@ -58,7 +59,20 @@ With a name, updates only that specific package.`,
 		updatedCount := 0
 		skippedCount := 0
 
+		runtimeOS := cfg.OS
+		runtimeArch := cfg.Arch
 		for name, pkg := range packagesToUpdate {
+			ok, targetOS, targetArch, err := config.PackageMatches(&pkg, runtimeOS, runtimeArch)
+			if err != nil {
+				return fmt.Errorf("%s: invalid condition: %w", name, err)
+			}
+			if !ok {
+				if verbose {
+					ui.Info.Printf("%s: skipped (os/arch condition)\n", name)
+				}
+				continue
+			}
+
 			owner, repo, err := github.ParseRepo(pkg.Repo)
 			if err != nil {
 				return fmt.Errorf("%s: invalid repo: %w", name, err)
@@ -71,7 +85,7 @@ With a name, updates only that specific package.`,
 			}
 
 			// Find matching asset
-			asset, err := github.FindMatchingAsset(release, pkg.Asset, pkg.OS, pkg.Arch)
+			asset, err := github.FindMatchingAsset(release, pkg.Asset, targetOS, targetArch)
 			if err != nil {
 				return fmt.Errorf("%s: no matching asset: %w", name, err)
 			}
@@ -90,10 +104,30 @@ With a name, updates only that specific package.`,
 				continue
 			}
 
-			// Install
+			// Install with rollback support
+			var backupPath string
+			var targetPath string
+			if exists && installed.InstallType != config.InstallTypeSystem {
+				targetPath = install.BinaryPath(installer.BinDir, name, installed.InstallType)
+				if targetPath != "" {
+					if _, err := os.Stat(targetPath); err == nil {
+						backupPath, err = install.BackupFile(targetPath)
+						if err != nil {
+							return fmt.Errorf("%s: failed to backup: %w", name, err)
+						}
+					}
+				}
+			}
+
 			result, err := installer.Install(name, release, asset)
 			if err != nil {
+				if backupPath != "" {
+					_ = install.RestoreFile(backupPath, targetPath)
+				}
 				return fmt.Errorf("%s: failed to install: %w", name, err)
+			}
+			if backupPath != "" {
+				_ = install.RemoveBackup(backupPath)
 			}
 
 			// Update state
