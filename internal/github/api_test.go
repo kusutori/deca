@@ -1,7 +1,11 @@
 package github
 
 import (
+	"os"
+	"path/filepath"
 	"testing"
+
+	"github.com/deca-org/deca/internal/config"
 )
 
 func TestParseRepo(t *testing.T) {
@@ -173,5 +177,42 @@ func TestFindMatchingAsset(t *testing.T) {
 				t.Errorf("expected asset '%s', got '%s'", tt.want, asset.Name)
 			}
 		})
+	}
+}
+
+func TestTransformDownloadURL_UsesMirrorConfig(t *testing.T) {
+	tmpDir := t.TempDir()
+	oldHome := os.Getenv("HOME")
+	os.Setenv("HOME", tmpDir)
+	defer os.Setenv("HOME", oldHome)
+
+	cfg := &config.MirrorConfig{
+		Mirrors: []config.Mirror{
+			{
+				Name:        "GitHub (Official)",
+				URL:         "https://github.com",
+				APIURL:      "https://api.github.com",
+				DownloadURL: "https://github.com/{owner}/{repo}/releases/download/{tag}/{asset}",
+			},
+			{
+				Name:        "Test Mirror",
+				URL:         "https://mirror.example.com",
+				APIURL:      "https://mirror.example.com",
+				DownloadURL: "https://mirror.example.com/{owner}/{repo}/releases/download/{tag}/{asset}",
+			},
+		},
+		CurrentName: "Test Mirror",
+	}
+
+	path := filepath.Join(tmpDir, ".config", "deca", "mirrors.toml")
+	if err := config.SaveMirrorConfig(path, cfg); err != nil {
+		t.Fatalf("failed to save mirror config: %v", err)
+	}
+
+	original := "https://github.com/owner/repo/releases/download/v1.0.0/asset.tar.gz"
+	got := TransformDownloadURL(original, "owner", "repo", "v1.0.0")
+	want := "https://mirror.example.com/owner/repo/releases/download/v1.0.0/asset.tar.gz"
+	if got != want {
+		t.Fatalf("expected mirror url %s, got %s", want, got)
 	}
 }

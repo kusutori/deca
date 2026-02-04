@@ -3,8 +3,10 @@ package cmd
 import (
 	"bufio"
 	"fmt"
+	"net/http"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/deca-org/deca/internal/config"
 	"github.com/deca-org/deca/internal/ui"
@@ -46,7 +48,7 @@ Examples:
 var mirrorListCmd = &cobra.Command{
 	Use:   "list",
 	Short: "List available mirrors",
-	Long: `List all available mirror sources with their status.`,
+	Long:  `List all available mirror sources with their status.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		return doMirrorList()
 	},
@@ -78,6 +80,18 @@ You cannot remove the default "GitHub (Official)" mirror.`,
 	},
 }
 
+// mirrorTestCmd tests connectivity for current mirror
+var mirrorTestCmd = &cobra.Command{
+	Use:   "test",
+	Short: "Test mirror connectivity",
+	Long: `Test the connectivity of the current mirror by probing API and download URLs.
+
+This will print the exact URL being tested.`,
+	RunE: func(cmd *cobra.Command, args []string) error {
+		return doMirrorTest()
+	},
+}
+
 func init() {
 	RootCmd.AddCommand(MirrorCmd)
 
@@ -86,6 +100,7 @@ func init() {
 	MirrorCmd.AddCommand(mirrorListCmd)
 	MirrorCmd.AddCommand(mirrorSelectCmd)
 	MirrorCmd.AddCommand(mirrorRemoveCmd)
+	MirrorCmd.AddCommand(mirrorTestCmd)
 }
 
 func doMirrorShow() error {
@@ -220,6 +235,8 @@ func doMirrorAdd(name, url string) error {
 		downloadURL = url + "/{owner}/{repo}/-/releases/{tag}/downloads/{asset}"
 	} else if strings.Contains(url, "fastgit") {
 		downloadURL = "https://download.fastgit.org/{owner}/{repo}/releases/download/{tag}/{asset}"
+	} else if strings.Contains(url, "ghfast") {
+		downloadURL = url + "/https://github.com/{owner}/{repo}/releases/download/{tag}/{asset}"
 	} else if strings.Contains(url, "ghproxy") {
 		downloadURL = url + "/https://github.com/{owner}/{repo}/releases/download/{tag}/{asset}"
 	}
@@ -291,10 +308,70 @@ func doMirrorRemove(name string) error {
 	return nil
 }
 
+func doMirrorTest() error {
+	cfg, err := config.LoadMirrorConfig(config.GetMirrorPath())
+	if err != nil {
+		return err
+	}
+	current := cfg.GetCurrentMirror()
+	if current == nil {
+		ui.Warning.Println("No mirror selected")
+		return nil
+	}
+
+	ui.Primary.Println("Mirror Connectivity Test:")
+	fmt.Println()
+	ui.SearchMeta.Printf("  Current: %s\n", current.Name)
+	fmt.Println()
+
+	client := &http.Client{Timeout: 6 * time.Second}
+
+	testAPIURL := strings.TrimRight(current.APIURL, "/") + "/rate_limit"
+	testDownloadURL := buildDownloadTestURL(current)
+
+	runMirrorProbe(client, "API", testAPIURL, "GET")
+	fmt.Println()
+	runMirrorProbe(client, "Download", testDownloadURL, "HEAD")
+
+	return nil
+}
+
+func buildDownloadTestURL(mirror *config.Mirror) string {
+	url := mirror.DownloadURL
+	url = strings.ReplaceAll(url, "{owner}", "cli")
+	url = strings.ReplaceAll(url, "{repo}", "cli")
+	url = strings.ReplaceAll(url, "{tag}", "v2.0.0")
+	url = strings.ReplaceAll(url, "{asset}", "gh_2.0.0_linux_amd64.tar.gz")
+	return url
+}
+
+func runMirrorProbe(client *http.Client, label, targetURL, method string) {
+	ui.Info.Printf("Testing %s URL:\n", label)
+	ui.SearchMeta.Printf("  %s\n", targetURL)
+
+	req, err := http.NewRequest(method, targetURL, nil)
+	if err != nil {
+		ui.Error.Printf("  Error: %v\n", err)
+		return
+	}
+
+	resp, err := client.Do(req)
+	if err != nil {
+		ui.Error.Printf("  Error: %v\n", err)
+		return
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode >= 200 && resp.StatusCode < 400 {
+		ui.Success.Printf("  OK (%d)\n", resp.StatusCode)
+	} else {
+		ui.Warning.Printf("  Status: %d\n", resp.StatusCode)
+	}
+}
+
 // GetCurrentMirror returns the currently selected mirror
 func GetCurrentMirror() *config.Mirror {
-	cfg := config.DefaultMirrorConfig()
-	return cfg.GetCurrentMirror()
+	return config.LoadCurrentMirror()
 }
 
 // GetMirrorURLs returns the API and download URLs for the current mirror

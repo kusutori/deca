@@ -30,6 +30,9 @@ func TestGetMirrorByName(t *testing.T) {
 	if mirror.URL != "https://ghfast.top" {
 		t.Errorf("expected URL https://ghfast.top, got %s", mirror.URL)
 	}
+	if mirror.DownloadURL != "https://ghfast.top/https://github.com/{owner}/{repo}/releases/download/{tag}/{asset}" {
+		t.Errorf("unexpected ghfast download URL: %s", mirror.DownloadURL)
+	}
 
 	// Test non-existing mirror
 	mirror = GetMirrorByName("NonExisting", mirrors)

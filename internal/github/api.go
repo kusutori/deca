@@ -118,7 +118,7 @@ func toReleaseInfo(release *github.RepositoryRelease, owner, repo string) *Relea
 // TransformDownloadURL transforms a download URL to use the current mirror
 func TransformDownloadURL(originalURL, owner, repo, tag string) string {
 	// Get current mirror
-	mirror := config.DefaultMirrorConfig().GetCurrentMirror()
+	mirror := config.LoadCurrentMirror()
 	if mirror == nil || mirror.Name == "GitHub (Official)" {
 		return originalURL
 	}

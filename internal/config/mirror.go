@@ -32,8 +32,8 @@ func DefaultMirrors() []Mirror {
 		{
 			Name:        "GitHub Fast (China)",
 			URL:         "https://ghfast.top",
-			APIURL:      "https://ghfast.top",
-			DownloadURL: "https://ghfast.top/{owner}/{repo}/releases/download/{tag}/{asset}",
+			APIURL:      "https://api.github.com",
+			DownloadURL: "https://ghfast.top/https://github.com/{owner}/{repo}/releases/download/{tag}/{asset}",
 		},
 		{
 			Name:        "GitHub Proxy (China)",
@@ -109,6 +109,19 @@ func DefaultMirrorConfig() *MirrorConfig {
 		Mirrors:     DefaultMirrors(),
 		CurrentName: "GitHub (Official)",
 	}
+}
+
+// LoadCurrentMirror loads the current mirror from config file, falling back to defaults.
+func LoadCurrentMirror() *Mirror {
+	cfg, err := LoadMirrorConfig(GetMirrorPath())
+	if err != nil {
+		return DefaultMirrorConfig().GetCurrentMirror()
+	}
+	current := cfg.GetCurrentMirror()
+	if current == nil {
+		return DefaultMirrorConfig().GetCurrentMirror()
+	}
+	return current
 }
 
 // GetCurrentMirror returns the currently selected mirror
