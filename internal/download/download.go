@@ -19,6 +19,9 @@ import (
 	"github.com/ulikunitz/xz"
 )
 
+var isTerminal = isatty.IsTerminal
+var progressWriter io.Writer = os.Stderr
+
 // copyFile copies a file from src to dst
 func copyFile(src, dst string) error {
 	srcFile, err := os.Open(src)
@@ -140,6 +143,11 @@ func DownloadAndExtractWithCache(asset *github.AssetInfo, targetOS, targetArch s
 	return result, nil
 }
 
+// DownloadFile downloads a file from a URL with progress when available.
+func DownloadFile(url, path string) error {
+	return downloadFile(url, path)
+}
+
 // downloadFile downloads a file from a URL
 func downloadFile(url, path string) error {
 	resp, err := http.Get(url)
@@ -163,32 +171,7 @@ func downloadFile(url, path string) error {
 	filename := filepath.Base(path)
 
 	// Use progress bar if we know the size and output is to a terminal
-	var bar *progressbar.ProgressBar
-	if contentLength > 0 && isatty.IsTerminal(os.Stderr.Fd()) {
-		bar = progressbar.NewOptions64(contentLength,
-			progressbar.OptionSetDescription("Downloading "+filename),
-			progressbar.OptionSetWriter(os.Stderr),
-			progressbar.OptionShowBytes(true),
-			progressbar.OptionShowCount(),
-			progressbar.OptionSetWidth(40),
-			progressbar.OptionThrottle(65*time.Millisecond),
-			progressbar.OptionSpinnerType(14),
-			progressbar.OptionFullWidth(),
-			progressbar.OptionSetRenderBlankState(true),
-			progressbar.OptionClearOnFinish(),
-			progressbar.OptionEnableColorCodes(true),
-			progressbar.OptionSetTheme(progressbar.Theme{
-				Saucer:        "[cyan]=[reset]",
-				SaucerHead:    "[cyan]>[reset]",
-				SaucerPadding: " ",
-				BarStart:      "[",
-				BarEnd:        "]",
-			}),
-			progressbar.OptionOnCompletion(func() {
-				fmt.Fprint(os.Stderr, "\n")
-			}),
-		)
-	}
+	bar := progressBarFor(contentLength, filename)
 
 	// Copy with progress - use MultiWriter to write to both file and progress bar
 	if bar != nil {
@@ -235,32 +218,7 @@ func downloadFileWithCache(url, path, repo, version, assetName, digest string) e
 	filename := filepath.Base(path)
 
 	// Use progress bar if we know the size and output is to a terminal
-	var bar *progressbar.ProgressBar
-	if contentLength > 0 && isatty.IsTerminal(os.Stderr.Fd()) {
-		bar = progressbar.NewOptions64(contentLength,
-			progressbar.OptionSetDescription("Downloading "+filename),
-			progressbar.OptionSetWriter(os.Stderr),
-			progressbar.OptionShowBytes(true),
-			progressbar.OptionShowCount(),
-			progressbar.OptionSetWidth(40),
-			progressbar.OptionThrottle(65*time.Millisecond),
-			progressbar.OptionSpinnerType(14),
-			progressbar.OptionFullWidth(),
-			progressbar.OptionSetRenderBlankState(true),
-			progressbar.OptionClearOnFinish(),
-			progressbar.OptionEnableColorCodes(true),
-			progressbar.OptionSetTheme(progressbar.Theme{
-				Saucer:        "[cyan]=[reset]",
-				SaucerHead:    "[cyan]>[reset]",
-				SaucerPadding: " ",
-				BarStart:      "[",
-				BarEnd:        "]",
-			}),
-			progressbar.OptionOnCompletion(func() {
-				fmt.Fprint(os.Stderr, "\n")
-			}),
-		)
-	}
+	bar := progressBarFor(contentLength, filename)
 
 	// Copy with progress
 	if bar != nil {
@@ -296,6 +254,42 @@ func downloadFileWithCache(url, path, repo, version, assetName, digest string) e
 	c.Put(repo, version, assetName, path)
 
 	return nil
+}
+
+func progressBarFor(contentLength int64, filename string) *progressbar.ProgressBar {
+	if contentLength <= 0 {
+		return nil
+	}
+	if progressWriter == nil {
+		return nil
+	}
+	if !isTerminal(os.Stderr.Fd()) {
+		return nil
+	}
+
+	return progressbar.NewOptions64(contentLength,
+		progressbar.OptionSetDescription("Downloading "+filename),
+		progressbar.OptionSetWriter(progressWriter),
+		progressbar.OptionShowBytes(true),
+		progressbar.OptionShowCount(),
+		progressbar.OptionSetWidth(40),
+		progressbar.OptionThrottle(65*time.Millisecond),
+		progressbar.OptionSpinnerType(14),
+		progressbar.OptionFullWidth(),
+		progressbar.OptionSetRenderBlankState(true),
+		progressbar.OptionClearOnFinish(),
+		progressbar.OptionEnableColorCodes(true),
+		progressbar.OptionSetTheme(progressbar.Theme{
+			Saucer:        "[cyan]=[reset]",
+			SaucerHead:    "[cyan]>[reset]",
+			SaucerPadding: " ",
+			BarStart:      "[",
+			BarEnd:        "]",
+		}),
+		progressbar.OptionOnCompletion(func() {
+			fmt.Fprint(progressWriter, "\n")
+		}),
+	)
 }
 
 // verifyChecksumIfAvailable checks for checksum and verifies the download

@@ -3,6 +3,10 @@ package download
 import (
 	"archive/tar"
 	"compress/gzip"
+	"io"
+	"net"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"testing"
@@ -12,10 +16,10 @@ import (
 
 func TestFindBinary(t *testing.T) {
 	tests := []struct {
-		name     string
-		files    []string
-		search   string
-		want     string
+		name   string
+		files  []string
+		search string
+		want   string
 	}{
 		{"exact match", []string{"eza", "README.md"}, "eza", "eza"},
 		{"with exe", []string{"app.exe"}, "app", "app.exe"},
@@ -36,8 +40,8 @@ func TestFindBinary(t *testing.T) {
 
 func TestFileSize(t *testing.T) {
 	tests := []struct {
-		size    int64
-		want    string
+		size int64
+		want string
 	}{
 		{0, "0 B"},
 		{500, "500 B"},
@@ -65,9 +69,9 @@ func TestExtractTarGz(t *testing.T) {
 
 	// Create test files
 	files := map[string]string{
-		"bin/tool":      "#!/bin/bash\necho hello",
-		"bin/other":     "other content",
-		"README":        "readme content",
+		"bin/tool":  "#!/bin/bash\necho hello",
+		"bin/other": "other content",
+		"README":    "readme content",
 	}
 
 	// Create tar.gz
@@ -111,9 +115,9 @@ func TestExtractTarXz(t *testing.T) {
 
 	// Create test files
 	files := map[string]string{
-		"bin/tool":      "#!/bin/bash\necho hello",
-		"bin/other":     "other content",
-		"README":        "readme content",
+		"bin/tool":  "#!/bin/bash\necho hello",
+		"bin/other": "other content",
+		"README":    "readme content",
 	}
 
 	// Create tar.xz
@@ -347,5 +351,72 @@ func TestDownloadFile_InvalidURL(t *testing.T) {
 	err := downloadFile("http://invalid.example.com/nonexistent", "/tmp/test")
 	if err == nil {
 		t.Error("expected error for invalid URL")
+	}
+}
+
+func TestProgressBarFor(t *testing.T) {
+	origIsTerminal := isTerminal
+	origWriter := progressWriter
+	t.Cleanup(func() {
+		isTerminal = origIsTerminal
+		progressWriter = origWriter
+	})
+
+	isTerminal = func(uintptr) bool { return true }
+	progressWriter = io.Discard
+
+	if bar := progressBarFor(128, "test.bin"); bar == nil {
+		t.Error("expected progress bar to be created")
+	}
+
+	isTerminal = func(uintptr) bool { return false }
+	if bar := progressBarFor(128, "test.bin"); bar != nil {
+		t.Error("expected no progress bar when not a terminal")
+	}
+
+	if bar := progressBarFor(0, "test.bin"); bar != nil {
+		t.Error("expected no progress bar for zero content length")
+	}
+}
+
+func TestDownloadFile_WithProgress(t *testing.T) {
+	origIsTerminal := isTerminal
+	origWriter := progressWriter
+	t.Cleanup(func() {
+		isTerminal = origIsTerminal
+		progressWriter = origWriter
+	})
+
+	isTerminal = func(uintptr) bool { return true }
+	progressWriter = io.Discard
+
+	payload := []byte("download payload")
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Length", "16")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write(payload)
+	})
+
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Skipf("skipping download test; cannot open listener: %v", err)
+	}
+	server := httptest.NewUnstartedServer(handler)
+	server.Listener = ln
+	server.Start()
+	defer server.Close()
+
+	tmpDir := t.TempDir()
+	target := filepath.Join(tmpDir, "payload.bin")
+	if err := DownloadFile(server.URL, target); err != nil {
+		t.Fatalf("DownloadFile failed: %v", err)
+	}
+
+	data, err := os.ReadFile(target)
+	if err != nil {
+		t.Fatalf("failed to read downloaded file: %v", err)
+	}
+	if string(data) != string(payload) {
+		t.Fatalf("downloaded data mismatch: got %q, want %q", string(data), string(payload))
 	}
 }

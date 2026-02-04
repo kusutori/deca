@@ -3,7 +3,6 @@ package install
 import (
 	"fmt"
 	"io"
-	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -122,7 +121,7 @@ func (i *Installer) installAppImage(name string, release *github.ReleaseInfo, as
 
 	// Download the AppImage
 	downloadPath := filepath.Join(tempDir, asset.Name)
-	if err := downloadFile(asset.DownloadURL, downloadPath); err != nil {
+	if err := download.DownloadFile(asset.DownloadURL, downloadPath); err != nil {
 		return nil, fmt.Errorf("failed to download %s: %w", asset.Name, err)
 	}
 
@@ -150,7 +149,7 @@ func (i *Installer) installAppImage(name string, release *github.ReleaseInfo, as
 func (i *Installer) installSystemPackage(name string, release *github.ReleaseInfo, asset *github.AssetInfo, pkgType string) (*InstallResult, error) {
 	// Download the package file
 	downloadPath := filepath.Join(i.BinDir, asset.Name)
-	if err := downloadFile(asset.DownloadURL, downloadPath); err != nil {
+	if err := download.DownloadFile(asset.DownloadURL, downloadPath); err != nil {
 		return nil, fmt.Errorf("failed to download %s: %w", asset.Name, err)
 	}
 
@@ -234,28 +233,6 @@ func extractDebPackageName(debPath string) string {
 		return ""
 	}
 	return strings.TrimSpace(string(output))
-}
-
-// downloadFile downloads a file from a URL (for system packages)
-func downloadFile(url, path string) error {
-	resp, err := http.Get(url)
-	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("HTTP %d", resp.StatusCode)
-	}
-
-	out, err := os.Create(path)
-	if err != nil {
-		return err
-	}
-	defer out.Close()
-
-	_, err = io.Copy(out, resp.Body)
-	return err
 }
 
 // copyFile copies a file from src to dst
