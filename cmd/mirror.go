@@ -236,6 +236,7 @@ func doMirrorAdd(name, url string) error {
 	} else if strings.Contains(url, "fastgit") {
 		downloadURL = "https://download.fastgit.org/{owner}/{repo}/releases/download/{tag}/{asset}"
 	} else if strings.Contains(url, "ghfast") {
+		apiURL = "https://api.github.com"
 		downloadURL = url + "/https://github.com/{owner}/{repo}/releases/download/{tag}/{asset}"
 	} else if strings.Contains(url, "ghproxy") {
 		downloadURL = url + "/https://github.com/{owner}/{repo}/releases/download/{tag}/{asset}"
@@ -326,7 +327,11 @@ func doMirrorTest() error {
 
 	client := &http.Client{Timeout: 6 * time.Second}
 
-	testAPIURL := strings.TrimRight(current.APIURL, "/") + "/rate_limit"
+	apiBase := current.APIURL
+	if apiBase == "" {
+		apiBase = "https://api.github.com"
+	}
+	testAPIURL := strings.TrimRight(apiBase, "/") + "/rate_limit"
 	testDownloadURL := buildDownloadTestURL(current)
 
 	runMirrorProbe(client, "API", testAPIURL, "GET")
@@ -342,6 +347,9 @@ func buildDownloadTestURL(mirror *config.Mirror) string {
 	url = strings.ReplaceAll(url, "{repo}", "cli")
 	url = strings.ReplaceAll(url, "{tag}", "v2.0.0")
 	url = strings.ReplaceAll(url, "{asset}", "gh_2.0.0_linux_amd64.tar.gz")
+	if strings.Contains(url, "{") {
+		ui.Warning.Println("Download URL template is invalid; please re-select or re-add the mirror.")
+	}
 	return url
 }
 

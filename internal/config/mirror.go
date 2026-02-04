@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/pelletier/go-toml/v2"
 )
@@ -93,6 +94,8 @@ func LoadMirrorConfig(path string) (*MirrorConfig, error) {
 	// Ensure we have mirrors (merge with defaults if empty)
 	if len(config.Mirrors) == 0 {
 		config.Mirrors = DefaultMirrors()
+	} else {
+		config.Mirrors = normalizeMirrors(config.Mirrors)
 	}
 
 	// Validate current mirror exists
@@ -101,6 +104,43 @@ func LoadMirrorConfig(path string) (*MirrorConfig, error) {
 	}
 
 	return &config, nil
+}
+
+func normalizeMirrors(mirrors []Mirror) []Mirror {
+	defaults := DefaultMirrors()
+	result := make([]Mirror, 0, len(mirrors))
+	for _, m := range mirrors {
+		normalized := m
+		if def := GetMirrorByName(m.Name, defaults); def != nil {
+			normalized = applyMirrorDefaults(m, *def)
+		}
+		result = append(result, normalized)
+	}
+	return result
+}
+
+func applyMirrorDefaults(current, def Mirror) Mirror {
+	if current.URL == "" {
+		current.URL = def.URL
+	}
+	if current.APIURL == "" {
+		current.APIURL = def.APIURL
+	}
+	if current.DownloadURL == "" {
+		current.DownloadURL = def.DownloadURL
+	}
+
+	// Fix known legacy patterns.
+	if current.Name == "GitHub Fast (China)" {
+		if strings.Contains(current.DownloadURL, "{url}") || strings.Contains(current.DownloadURL, "ghfast.top/{owner}") {
+			current.DownloadURL = def.DownloadURL
+		}
+		if current.APIURL == "https://ghfast.top" {
+			current.APIURL = def.APIURL
+		}
+	}
+
+	return current
 }
 
 // DefaultMirrorConfig returns the default mirror configuration

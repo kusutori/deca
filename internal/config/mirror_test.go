@@ -141,6 +141,43 @@ func TestMirrorDownloadURLPattern(t *testing.T) {
 	}
 }
 
+func TestLoadMirrorConfigNormalizesGhfast(t *testing.T) {
+	tmpDir := t.TempDir()
+	path := filepath.Join(tmpDir, "mirrors.toml")
+
+	cfg := &MirrorConfig{
+		Mirrors: []Mirror{
+			{
+				Name:        "GitHub Fast (China)",
+				URL:         "https://ghfast.top",
+				APIURL:      "https://ghfast.top",
+				DownloadURL: "https://ghfast.top/{url}",
+			},
+		},
+		CurrentName: "GitHub Fast (China)",
+	}
+
+	if err := SaveMirrorConfig(path, cfg); err != nil {
+		t.Fatalf("failed to save config: %v", err)
+	}
+
+	loaded, err := LoadMirrorConfig(path)
+	if err != nil {
+		t.Fatalf("failed to load config: %v", err)
+	}
+
+	m := loaded.GetCurrentMirror()
+	if m == nil {
+		t.Fatal("expected current mirror")
+	}
+	if m.APIURL != "https://api.github.com" {
+		t.Fatalf("expected api.github.com, got %s", m.APIURL)
+	}
+	if m.DownloadURL != "https://ghfast.top/https://github.com/{owner}/{repo}/releases/download/{tag}/{asset}" {
+		t.Fatalf("unexpected ghfast download url: %s", m.DownloadURL)
+	}
+}
+
 func contains(s, substr string) bool {
 	return len(s) >= len(substr) && (s == substr || len(s) > 0 && containsAt(s, substr))
 }
