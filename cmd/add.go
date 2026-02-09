@@ -118,9 +118,6 @@ func interactiveSelectAsset(owner, repoName string) (*github.AssetInfo, error) {
 		return nil, fmt.Errorf("failed to get release: %w", err)
 	}
 
-	// Print asset table
-	ui.PrintAssetTable(release.Assets, owner+"/"+repoName)
-
 	// Check if we should use interactive selection
 	if !ui.IsTerminal() {
 		ui.Info.Println("Non-interactive mode, using first asset")
@@ -130,7 +127,7 @@ func interactiveSelectAsset(owner, repoName string) (*github.AssetInfo, error) {
 		return nil, nil
 	}
 
-	// Use interactive selector
+	// Use interactive selector (which prints the table)
 	fullName := owner + "/" + repoName
 	selected := ui.InteractiveSelectAssets(release.Assets, fullName)
 

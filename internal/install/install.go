@@ -13,6 +13,7 @@ import (
 	"github.com/deca-org/deca/internal/config"
 	"github.com/deca-org/deca/internal/download"
 	"github.com/deca-org/deca/internal/github"
+	"github.com/deca-org/deca/internal/ui"
 )
 
 var downloadFileFunc = download.DownloadFile
@@ -39,20 +40,23 @@ type InstallResult struct {
 
 // Install installs a package from a release
 func (i *Installer) Install(name string, release *github.ReleaseInfo, asset *github.AssetInfo) (*InstallResult, error) {
+	// Expand $HOME in BinDir first
+	binDir := expandPath(i.BinDir)
+
 	// Create bin directory if needed
-	if err := os.MkdirAll(i.BinDir, 0755); err != nil {
+	if err := os.MkdirAll(binDir, 0755); err != nil {
 		return nil, fmt.Errorf("failed to create bin directory: %w", err)
 	}
 
 	// Check if this is an AppImage (self-contained executable)
 	if strings.HasSuffix(strings.ToLower(asset.Name), ".appimage") {
-		return i.installAppImage(name, release, asset)
+		return i.installAppImage(name, release, asset, binDir)
 	}
 
 	// Check if this is a system package (.deb, .rpm, etc.)
 	if pkgType := DetectPackageType(asset.Name); pkgType != "" {
 		// System package - download and install via package manager
-		return i.installSystemPackage(name, release, asset, pkgType)
+		return i.installSystemPackage(name, release, asset, pkgType, binDir)
 	}
 
 	// Regular binary package - download and extract with caching
@@ -91,7 +95,7 @@ func (i *Installer) Install(name string, release *github.ReleaseInfo, asset *git
 	if runtime.GOOS == "windows" && !strings.HasSuffix(name, ".exe") {
 		finalBinaryName += ".exe"
 	}
-	finalPath := filepath.Join(i.BinDir, finalBinaryName)
+	finalPath := filepath.Join(binDir, finalBinaryName)
 
 	// Copy binary to bin directory
 	if err := copyFile(binaryPath, finalPath); err != nil {
@@ -113,7 +117,7 @@ func (i *Installer) Install(name string, release *github.ReleaseInfo, asset *git
 }
 
 // installAppImage handles AppImage installation (self-contained executable)
-func (i *Installer) installAppImage(name string, release *github.ReleaseInfo, asset *github.AssetInfo) (*InstallResult, error) {
+func (i *Installer) installAppImage(name string, release *github.ReleaseInfo, asset *github.AssetInfo, binDir string) (*InstallResult, error) {
 	// Create temp directory for download
 	tempDir, err := os.MkdirTemp("", "deca-*")
 	if err != nil {
@@ -133,7 +137,7 @@ func (i *Installer) installAppImage(name string, release *github.ReleaseInfo, as
 	}
 
 	// Copy to bin directory
-	finalPath := filepath.Join(i.BinDir, name)
+	finalPath := filepath.Join(binDir, name)
 	if err := copyFile(downloadPath, finalPath); err != nil {
 		return nil, fmt.Errorf("failed to copy AppImage: %w", err)
 	}
@@ -148,9 +152,9 @@ func (i *Installer) installAppImage(name string, release *github.ReleaseInfo, as
 }
 
 // installSystemPackage handles system package installation (.deb, .rpm)
-func (i *Installer) installSystemPackage(name string, release *github.ReleaseInfo, asset *github.AssetInfo, pkgType string) (*InstallResult, error) {
+func (i *Installer) installSystemPackage(name string, release *github.ReleaseInfo, asset *github.AssetInfo, pkgType string, binDir string) (*InstallResult, error) {
 	// Download the package file
-	downloadPath := filepath.Join(i.BinDir, asset.Name)
+	downloadPath := filepath.Join(binDir, asset.Name)
 	if err := downloadFileFunc(asset.DownloadURL, downloadPath); err != nil {
 		return nil, fmt.Errorf("failed to download %s: %w", asset.Name, err)
 	}
@@ -187,9 +191,9 @@ func (i *Installer) installSystemPackage(name string, release *github.ReleaseInf
 	if syscall.Getuid() != 0 {
 		// Need sudo, check if cached
 		if !IsSudoCached() {
-			fmt.Printf("Installing %s requires sudo privileges.\n", name)
+			ui.Info.Printf("Installing %s requires sudo privileges.\n", name)
 		}
-		if err := SudoRun(pkgManager, append([]string{"install", "-y"}, downloadPath)...); err != nil {
+		if err := SudoRun(pkgManager, "install", "-y", downloadPath); err != nil {
 			// Clean up failed download
 			os.Remove(downloadPath)
 			return nil, fmt.Errorf("failed to install %s: %w", name, err)
@@ -282,7 +286,8 @@ func (i *Installer) Uninstall(name string, installType config.InstallType, syste
 
 // uninstallBinary removes a binary installed from archive
 func (i *Installer) uninstallBinary(name string) error {
-	path := filepath.Join(i.BinDir, name)
+	binDir := expandPath(i.BinDir)
+	path := filepath.Join(binDir, name)
 	if runtime.GOOS == "windows" {
 		path += ".exe"
 	}
@@ -293,7 +298,7 @@ func (i *Installer) uninstallBinary(name string) error {
 
 	// Try without .exe on Windows
 	if runtime.GOOS == "windows" {
-		pathNoExt := filepath.Join(i.BinDir, name)
+		pathNoExt := filepath.Join(binDir, name)
 		if _, err := os.Stat(pathNoExt); err == nil {
 			return os.Remove(pathNoExt)
 		}
@@ -304,7 +309,8 @@ func (i *Installer) uninstallBinary(name string) error {
 
 // uninstallAppImage removes an AppImage
 func (i *Installer) uninstallAppImage(name string) error {
-	path := filepath.Join(i.BinDir, name)
+	binDir := expandPath(i.BinDir)
+	path := filepath.Join(binDir, name)
 	if _, err := os.Stat(path); err == nil {
 		return os.Remove(path)
 	}
@@ -359,7 +365,7 @@ func (i *Installer) uninstallSystemPackage(name, systemPkgName string) error {
 
 // EnsureBinDir creates the binary directory if it doesn't exist
 func (i *Installer) EnsureBinDir() error {
-	return os.MkdirAll(i.BinDir, 0755)
+	return os.MkdirAll(expandPath(i.BinDir), 0755)
 }
 
 // BinDirInPATH checks if bin_dir is in PATH
@@ -370,9 +376,13 @@ func (i *Installer) BinDirInPATH() bool {
 		pathSep = ";"
 	}
 
-	absBinDir, _ := filepath.Abs(i.BinDir)
+	// Expand $HOME in BinDir first
+	binDir := expandPath(i.BinDir)
+	absBinDir, _ := filepath.Abs(binDir)
 	for _, dir := range strings.Split(pathEnv, pathSep) {
-		absDir, _ := filepath.Abs(dir)
+		// Also expand $HOME in PATH entries
+		expandedDir := expandPath(dir)
+		absDir, _ := filepath.Abs(expandedDir)
 		if absDir == absBinDir {
 			return true
 		}
@@ -413,4 +423,14 @@ func detectShell() string {
 		return "fish"
 	}
 	return base
+}
+
+// expandPath expands $HOME and ~ in a path
+func expandPath(path string) string {
+	home, _ := os.UserHomeDir()
+	if home != "" {
+		path = strings.ReplaceAll(path, "$HOME", home)
+		path = strings.ReplaceAll(path, "~", home)
+	}
+	return path
 }

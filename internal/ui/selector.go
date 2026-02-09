@@ -98,7 +98,7 @@ func InteractiveSelectAssets(assets []github.AssetInfo, repoName string) *github
 		return nil
 	}
 
-	// Print table and get selection
+	// Print table and get selection (PrintAssetTable handles the display and input)
 	selectedIndex := PrintAssetTable(assets, repoName)
 	if selectedIndex >= 0 && selectedIndex < len(assets) {
 		return &assets[selectedIndex]

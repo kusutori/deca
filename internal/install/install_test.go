@@ -360,7 +360,7 @@ func TestInstallSystemPackage_UsesDownloadFile(t *testing.T) {
 		DownloadURL: "http://example.com/tool.deb",
 	}
 
-	_, err := installer.installSystemPackage("tool", release, asset, "deb")
+	_, err := installer.installSystemPackage("tool", release, asset, "deb", "/tmp")
 	if !errors.Is(err, sentinel) {
 		t.Fatalf("expected download error, got %v", err)
 	}

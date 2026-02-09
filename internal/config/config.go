@@ -32,6 +32,23 @@ func DefaultStateDir() string {
 	return filepath.Join(home, ".local", "state", "deca")
 }
 
+// DefaultDesktopDir returns the default desktop entry directory
+func DefaultDesktopDir() string {
+	home, _ := os.UserHomeDir()
+	if home == "" {
+		home = os.Getenv("HOME")
+	}
+	if home == "" {
+		home = os.Getenv("USERPROFILE")
+	}
+	return filepath.Join(home, ".local", "share", "applications")
+}
+
+// DesktopEntryPath returns the path for a .desktop entry file
+func DesktopEntryPath(name string) string {
+	return filepath.Join(DefaultDesktopDir(), name+".desktop")
+}
+
 // DefaultBinDir returns the default binary directory
 func DefaultBinDir() string {
 	home, _ := os.UserHomeDir()
@@ -68,13 +85,24 @@ type SystemInfo struct {
 	BinDir         string `toml:"bin_dir"`
 }
 
+// DesktopConfig represents .desktop file configuration
+type DesktopConfig struct {
+	Name       string `toml:"name"`        // Application name (defaults to package name)
+	Comment    string `toml:"comment"`     // Short description
+	Icon       string `toml:"icon"`        // Icon name or path
+	Terminal   bool   `toml:"terminal"`    // Whether to run in terminal
+	Categories string `toml:"categories"`  // Categories (default: Utilities)
+	MimeTypes  string `toml:"mime_types"`  // MIME types
+}
+
 // Package represents a single package configuration
 type Package struct {
-	Repo    string `toml:"repo"`
-	Asset   string `toml:"asset"`
-	Version string `toml:"version"`
-	OS      string `toml:"os"`
-	Arch    string `toml:"arch"`
+	Repo     string         `toml:"repo"`
+	Asset    string         `toml:"asset"`
+	Version  string         `toml:"version"`
+	OS       string         `toml:"os"`
+	Arch     string         `toml:"arch"`
+	Desktop  *DesktopConfig `toml:"desktop"`
 }
 
 // Settings represents optional settings
@@ -148,6 +176,17 @@ func Load(path string) (*Config, error) {
 				}
 				if arch, ok := v["arch"].(string); ok {
 					pkg.Arch = arch
+				}
+				// Parse desktop config
+				if desktop, ok := v["desktop"].(map[string]interface{}); ok {
+					pkg.Desktop = &DesktopConfig{
+						Name:       getString(desktop, "name"),
+						Comment:    getString(desktop, "comment"),
+						Icon:       getString(desktop, "icon"),
+						Terminal:   getBool(desktop, "terminal"),
+						Categories: getString(desktop, "categories"),
+						MimeTypes:  getString(desktop, "mime_types"),
+					}
 				}
 			}
 			cfg.Packages[name] = pkg

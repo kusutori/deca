@@ -38,7 +38,7 @@ func (i *Installer) InstallSystemPackage(name string, assetName string, pkgType 
 	if syscall.Getuid() == 0 {
 		// Running as root, just install
 		cmd := exec.Command(pkgManager, installArgs...)
-		cmd.Dir = i.BinDir
+		cmd.Dir = expandPath(i.BinDir)
 		cmd.Stdin = os.Stdin
 		cmd.Stdout = os.Stdout
 		cmd.Stderr = os.Stderr
@@ -56,7 +56,7 @@ func (i *Installer) InstallSystemPackage(name string, assetName string, pkgType 
 		// sudo is cached, run without password prompt
 		sudoArgs := append([]string{pkgManager}, installArgs...)
 		sudoCmd := exec.Command("sudo", sudoArgs...)
-		sudoCmd.Dir = i.BinDir
+		sudoCmd.Dir = expandPath(i.BinDir)
 		sudoCmd.Stdin = os.Stdin
 		sudoCmd.Stdout = os.Stdout
 		sudoCmd.Stderr = os.Stderr
@@ -77,7 +77,7 @@ func (i *Installer) InstallSystemPackage(name string, assetName string, pkgType 
 	// Run the install command with sudo
 	sudoArgs := append([]string{pkgManager}, installArgs...)
 	sudoCmd := exec.Command("sudo", sudoArgs...)
-	sudoCmd.Dir = i.BinDir
+	sudoCmd.Dir = expandPath(i.BinDir)
 	sudoCmd.Stdout = os.Stdout
 	sudoCmd.Stderr = os.Stderr
 
