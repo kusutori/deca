@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"fmt"
+	"os"
 
 	"github.com/deca-org/deca/internal/config"
 	"github.com/deca-org/deca/internal/install"
@@ -71,6 +72,20 @@ file and uninstalls the installed binary or system package.`,
 			}
 		}
 
+		// Remove desktop entry if it exists
+		keepDesktop, _ := cmd.Flags().GetBool("keep-desktop")
+		desktopPath := config.DesktopEntryPath(name)
+		if _, err := os.Stat(desktopPath); err == nil {
+			// Remove desktop entry unless --keep-desktop is specified
+			if !keepDesktop {
+				if err := os.Remove(desktopPath); err != nil {
+					ui.Warning.Printf("Warning: failed to remove desktop entry: %v\n", err)
+				} else {
+					ui.Success.Printf("Removed desktop entry: %s\n", desktopPath)
+				}
+			}
+		}
+
 		// Remove from state
 		if installed {
 			state.RemovePackage(name)
@@ -85,5 +100,6 @@ file and uninstalls the installed binary or system package.`,
 
 func init() {
 	RemoveCmd.Flags().BoolP("keep-installed", "k", false, "Keep the installed package, only remove from config")
+	RemoveCmd.Flags().Bool("keep-desktop", false, "Keep the desktop entry file when removing")
 	RootCmd.AddCommand(RemoveCmd)
 }
