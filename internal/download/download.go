@@ -506,8 +506,13 @@ func FindBinary(files []string, name string) string {
 		}
 	}
 
-	// Look for binary in PATH-like names
+	// Look for binary in PATH-like names (skip directories if file exists)
 	for _, f := range files {
+		info, err := os.Stat(f)
+		// Only skip if file exists AND is a directory
+		if err == nil && info.IsDir() {
+			continue
+		}
 		base := filepath.Base(f)
 		if base == name ||
 			strings.Contains(base, name) ||

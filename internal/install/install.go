@@ -82,11 +82,37 @@ func (i *Installer) Install(name string, release *github.ReleaseInfo, asset *git
 		if found != "" {
 			binaryPath = filepath.Join(result.TempDir, found)
 		} else {
-			// Use first file if no match found
-			binaryPath = filepath.Join(result.TempDir, result.Files[0])
+			// No match found, look for the first executable file
+			for _, f := range result.Files {
+				fullPath := filepath.Join(result.TempDir, f)
+				info, err := os.Stat(fullPath)
+				if err != nil {
+					continue
+				}
+				if !info.IsDir() && info.Mode()&0111 != 0 {
+					binaryPath = fullPath
+					break
+				}
+			}
+			// If still not found, use first regular file
+			if binaryPath == "" {
+				for _, f := range result.Files {
+					fullPath := filepath.Join(result.TempDir, f)
+					info, err := os.Stat(fullPath)
+					if err != nil {
+						continue
+					}
+					if !info.IsDir() {
+						binaryPath = fullPath
+						break
+					}
+				}
+			}
 		}
-	} else {
-		// Fallback to downloaded path (shouldn't happen normally)
+	}
+
+	// If still no binary found, fallback to downloaded path
+	if binaryPath == "" {
 		binaryPath = result.Path
 	}
 
