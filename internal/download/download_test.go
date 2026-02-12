@@ -16,23 +16,24 @@ import (
 
 func TestFindBinary(t *testing.T) {
 	tests := []struct {
-		name   string
-		files  []string
-		search string
-		want   string
+		name    string
+		files   []string
+		search  string
+		want    string
+		tempDir string
 	}{
-		{"exact match", []string{"eza", "README.md"}, "eza", "eza"},
-		{"with exe", []string{"app.exe"}, "app", "app.exe"},
-		{"contains", []string{"eza-x86_64-unknown-linux-musl"}, "eza", "eza-x86_64-unknown-linux-musl"},
-		{"case insensitive", []string{"EZA"}, "eza", "EZA"},
-		{"not found", []string{"other"}, "eza", ""},
+		{"exact match", []string{"eza", "README.md"}, "eza", "eza", ""},
+		{"with exe", []string{"app.exe"}, "app", "app.exe", ""},
+		{"contains", []string{"eza-x86_64-unknown-linux-musl"}, "eza", "eza-x86_64-unknown-linux-musl", ""},
+		{"case insensitive", []string{"EZA"}, "eza", "EZA", ""},
+		{"not found", []string{"other"}, "eza", "", ""},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := FindBinary(tt.files, tt.search)
+			got := FindBinary(tt.files, tt.search, tt.tempDir)
 			if got != tt.want {
-				t.Errorf("FindBinary(%v, %q) = %q, want %q", tt.files, tt.search, got, tt.want)
+				t.Errorf("FindBinary(%v, %q, %q) = %q, want %q", tt.files, tt.search, tt.tempDir, got, tt.want)
 			}
 		})
 	}

@@ -488,7 +488,7 @@ func extractTar(reader io.Reader, dest string) ([]string, error) {
 }
 
 // FindBinary finds the binary in extracted files
-func FindBinary(files []string, name string) string {
+func FindBinary(files []string, name string, tempDir string) string {
 	// Look for exact match first
 	for _, f := range files {
 		if filepath.Base(f) == name {
@@ -508,7 +508,8 @@ func FindBinary(files []string, name string) string {
 
 	// Look for binary in PATH-like names (skip directories if file exists)
 	for _, f := range files {
-		info, err := os.Stat(f)
+		fullPath := filepath.Join(tempDir, f)
+		info, err := os.Stat(fullPath)
 		// Only skip if file exists AND is a directory
 		if err == nil && info.IsDir() {
 			continue
@@ -521,11 +522,14 @@ func FindBinary(files []string, name string) string {
 		}
 	}
 
-	// Return first executable file if no match
-	for _, f := range files {
-		info, err := os.Stat(f)
-		if err == nil && !info.IsDir() && info.Mode()&0111 != 0 {
-			return f
+	// Return first executable file if no match (only if tempDir is provided)
+	if tempDir != "" {
+		for _, f := range files {
+			fullPath := filepath.Join(tempDir, f)
+			info, err := os.Stat(fullPath)
+			if err == nil && !info.IsDir() && info.Mode()&0111 != 0 {
+				return f
+			}
 		}
 	}
 

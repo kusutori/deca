@@ -78,7 +78,7 @@ func (i *Installer) Install(name string, release *github.ReleaseInfo, asset *git
 	// For single binaries, result.Files contains the download path
 	if len(result.Files) > 0 {
 		// Try to find the binary by name first
-		found := download.FindBinary(result.Files, binaryName)
+		found := download.FindBinary(result.Files, binaryName, result.TempDir)
 		if found != "" {
 			binaryPath = filepath.Join(result.TempDir, found)
 		} else {
@@ -451,8 +451,11 @@ func detectShell() string {
 	return base
 }
 
-// expandPath expands $HOME and ~ in a path
+// expandPath expands $HOME and ~ in a path, and removes quotes
 func expandPath(path string) string {
+	// Remove leading/trailing single and double quotes
+	path = strings.Trim(path, `'"`)
+
 	home, _ := os.UserHomeDir()
 	if home != "" {
 		path = strings.ReplaceAll(path, "$HOME", home)

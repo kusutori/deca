@@ -178,8 +178,11 @@ func init() {
 	RootCmd.AddCommand(DesktopCmd)
 }
 
-// expandPath expands $HOME and environment variables in paths
+// expandPath expands $HOME and ~ in a path, and removes quotes
 func expandPath(path string) string {
+	// Remove leading/trailing single and double quotes
+	path = strings.Trim(path, `'"`)
+
 	home, _ := os.UserHomeDir()
 	if home != "" {
 		path = strings.ReplaceAll(path, "$HOME", home)
