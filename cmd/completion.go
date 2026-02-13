@@ -3,66 +3,69 @@ package cmd
 import (
 	"fmt"
 	"io"
+	"os/exec"
 	"strings"
 
 	"github.com/spf13/cobra"
 )
 
-// completionCmd generates shell completion scripts.
+// completionCmd generates shell completion scripts using carapace.
 var completionCmd = &cobra.Command{
-	Use:   "completion [bash|zsh|fish|powershell|nushell]",
+	Use:   "completion [bash|zsh|fish|powershell]",
 	Short: "Generate shell completion scripts",
 	Long: `Generate shell completion scripts for supported shells.
+
+This command uses carapace-bin to generate completion scripts.
+Make sure carapace-bin is installed:
+  go install github.com/carapace-sh/carapace-bin@latest
+
+Then generate completions:
+  carapace _deca bash > ~/.bash_completion.d/deca
+  carapace _deca zsh  > ~/.zsh/completion/_deca
+  carapace _deca fish > ~/.config/fish/completions/deca.fish
 
 Examples:
   deca completion bash
   deca completion zsh
-  deca completion fish
-  deca completion powershell
-  deca completion nushell`,
+  deca completion fish`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		shell := strings.ToLower(args[0])
-		out := cmd.OutOrStdout()
-
-		switch shell {
-		case "bash":
-			return RootCmd.GenBashCompletionV2(out, true)
-		case "zsh":
-			return RootCmd.GenZshCompletion(out)
-		case "fish":
-			return RootCmd.GenFishCompletion(out, true)
-		case "powershell", "pwsh":
-			return RootCmd.GenPowerShellCompletionWithDesc(out)
-		case "nushell", "nu":
-			return genNushellCompletion(out, RootCmd)
-		default:
-			return fmt.Errorf("unsupported shell: %s", shell)
+		// Check if carapace-bin is available
+		if _, err := exec.LookPath("carapace"); err != nil {
+			fmt.Fprintln(cmd.OutOrStdout(), "carapace-bin not found. Install it with:")
+			fmt.Fprintln(cmd.OutOrStdout(), "  go install github.com/carapace-sh/carapace-bin@latest")
+			fmt.Fprintln(cmd.OutOrStdout(), "")
+			fmt.Fprintln(cmd.OutOrStdout(), "Then generate completions:")
+			fmt.Fprintln(cmd.OutOrStdout(), "  carapace _deca bash > ~/.bash_completion.d/deca")
+			fmt.Fprintln(cmd.OutOrStdout(), "  carapace _deca zsh  > ~/.zsh/completion/_deca")
+			fmt.Fprintln(cmd.OutOrStdout(), "  carapace _deca fish > ~/.config/fish/completions/deca.fish")
+			return nil
 		}
+
+		shell := strings.ToLower(args[0])
+		return generateCompletion(shell, cmd.OutOrStdout())
 	},
+}
+
+func generateCompletion(shell string, out io.Writer) error {
+	switch shell {
+	case "bash":
+		_, err := fmt.Fprintln(out, "Run: carapace _deca bash > ~/.bash_completion.d/deca")
+		return err
+	case "zsh":
+		_, err := fmt.Fprintln(out, "Run: carapace _deca zsh > ~/.zsh/completion/_deca")
+		return err
+	case "fish":
+		_, err := fmt.Fprintln(out, "Run: carapace _deca fish > ~/.config/fish/completions/deca.fish")
+		return err
+	case "powershell", "pwsh":
+		_, err := fmt.Fprintln(out, "Run: carapace _deca powershell > ~/.config/powershell/Modules/deca/deca.ps1")
+		return err
+	default:
+		return fmt.Errorf("unsupported shell: %s (supported: bash, zsh, fish, powershell)", shell)
+	}
 }
 
 func init() {
 	RootCmd.AddCommand(completionCmd)
-}
-
-func genNushellCompletion(w io.Writer, root *cobra.Command) error {
-	name := root.Name()
-	_, err := fmt.Fprintf(w, `# Nushell completion for %s
-def "nu-complete %s" [line: string, pos: int] {
-  let cmd = ($line | str substring ..$pos)
-  let completions = (^%s __complete $cmd | lines)
-  $completions
-    | where {|it| not ($it | str starts-with ":")}
-    | each {|it|
-        let parts = ($it | split column "\t")
-        { value: $parts.column1, description: ($parts.column2 | default "") }
-      }
-}
-
-export extern "%s" [
-  ...args
-] | complete "nu-complete %s"
-`, name, name, name, name, name)
-	return err
 }
