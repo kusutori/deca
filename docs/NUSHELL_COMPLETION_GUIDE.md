@@ -53,15 +53,19 @@ $env.config.completions = {
         max_results: 100
         completer: {|spans|
             let cmd = $spans.0
-            # For commands with built-in carapace support
-            if ($cmd == "deca") {
+            # List of commands that have built-in _carapace support
+            # Add your own CLI tools here as you develop them
+            let carapace_native_cmds = ["deca"]
+
+            if ($cmd in $carapace_native_cmds) {
+                # Use the command's built-in carapace support
                 try {
-                    deca _carapace nushell ...$spans | from json
+                    ^$cmd _carapace nushell ...$spans | from json
                 } catch {
                     null
                 }
             } else {
-                # For other commands, use carapace if installed
+                # Use carapace for other commands
                 try {
                     carapace $cmd nushell ...$spans | from json
                 } catch {
@@ -72,6 +76,8 @@ $env.config.completions = {
     }
 }
 ```
+
+**Scalability**: If you develop multiple CLI tools with `_carapace` support, simply add them to the `carapace_native_cmds` list instead of writing multiple `if` statements. This keeps the configuration clean and maintainable.
 
 ### Step 3: No Need for Separate Completion Files
 
