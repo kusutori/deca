@@ -21,20 +21,19 @@ func setupAddCompletions() {
 	// Complete repository names (owner/repo format)
 	carapace.Gen(AddCmd).PositionalCompletion(
 		carapace.ActionCallback(func(c carapace.Context) carapace.Action {
-			if len(c.Args) == 0 {
-				return carapace.ActionValues()
+			// c.Value contains the current input being typed
+			query := c.Value
+
+			// Require at least 2 characters for search to avoid too many results
+			if len(query) < 2 {
+				return carapace.ActionValues() // Return empty list
 			}
 
-			query := c.Args[0]
-			if query == "" {
-				return carapace.ActionValues()
-			}
-
-			// Use GitHub search
+			// Use GitHub search (add has:releases sort:stars like search command)
 			ghClient := github.NewClient()
-			repos, err := ghClient.SearchRepositories(getContext(), query)
+			repos, err := ghClient.SearchRepositories(getContext(), query+" has:releases sort:stars")
 			if err != nil {
-				return carapace.ActionValues()
+				return carapace.ActionValues() // Return empty on error
 			}
 
 			var pairs []string

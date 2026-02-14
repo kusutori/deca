@@ -3,6 +3,7 @@ module github.com/deca-org/deca
 go 1.24.0
 
 require (
+	github.com/carapace-sh/carapace v1.11.1
 	github.com/fatih/color v1.18.0
 	github.com/google/go-github/v60 v60.0.0
 	github.com/mattn/go-isatty v0.0.20
@@ -16,7 +17,6 @@ require (
 )
 
 require (
-	github.com/carapace-sh/carapace v1.11.1 // indirect
 	github.com/carapace-sh/carapace-shlex v1.1.1 // indirect
 	github.com/google/go-querystring v1.1.0 // indirect
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect

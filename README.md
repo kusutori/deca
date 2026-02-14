@@ -123,7 +123,7 @@ check_interval = "24h"
 
 ## Shell 补全
 
-通过 `deca completion <shell>` 生成补全脚本，并按以下方式集成：
+通过 `deca completion <shell>` 生成补全脚本（基于 Carapace），并按以下方式集成：
 
 ### Bash
 ```bash
@@ -148,6 +148,10 @@ deca completion powershell | Out-String | Invoke-Expression
 ### Nushell
 ```nu
 deca completion nushell | save -f ~/.config/nushell/completions/deca.nu
+```
+并在 `config.nu` 中添加：
+```nu
+source ~/.config/nushell/completions/deca.nu
 ```
 
 ## 支持的包格式
