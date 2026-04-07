@@ -13,9 +13,10 @@ import (
 	"github.com/spf13/pflag"
 )
 
-// Version and Build are set at build time
+// Version, Build, and BuildTime are set at build time
 var Version = "dev"
 var Build = "unknown"
+var BuildTime = "unknown"
 
 // Color definitions for help output
 var (
@@ -42,7 +43,7 @@ Find more information at: https://github.com/deca-org/deca`,
 
 // Execute runs the root command
 func Execute() int {
-	RootCmd.Version = Version + " (build " + Build + ")"
+	RootCmd.Version = Version + " (build " + Build + ", " + BuildTime + ")"
 	if err := RootCmd.Execute(); err != nil {
 		ui.PrintDecaError(err)
 		return 1

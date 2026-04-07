@@ -97,12 +97,13 @@ type DesktopConfig struct {
 
 // Package represents a single package configuration
 type Package struct {
-	Repo     string         `toml:"repo"`
-	Asset    string         `toml:"asset"`
-	Version  string         `toml:"version"`
-	OS       string         `toml:"os"`
-	Arch     string         `toml:"arch"`
-	Desktop  *DesktopConfig `toml:"desktop"`
+	Repo      string         `toml:"repo"`
+	Asset     string         `toml:"asset"`
+	Version   string         `toml:"version"`
+	OS        string         `toml:"os"`
+	Arch      string         `toml:"arch"`
+	Desktop   *DesktopConfig `toml:"desktop"`
+	Versioned bool           `toml:"versioned"` // Keep versioned binaries with symlink
 }
 
 // Settings represents optional settings
@@ -188,6 +189,8 @@ func Load(path string) (*Config, error) {
 						MimeTypes:  getString(desktop, "mime_types"),
 					}
 				}
+				// Parse versioned flag
+				pkg.Versioned = getBool(v, "versioned")
 			}
 			cfg.Packages[name] = pkg
 		}

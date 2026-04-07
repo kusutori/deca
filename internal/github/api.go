@@ -296,7 +296,10 @@ func matchesOSArch(name string, os, arch string) bool {
 		archMatches := false
 		switch arch {
 		case "amd64", "x86_64":
-			archMatches = strings.Contains(nameLower, "x86_64") || strings.Contains(nameLower, "amd64")
+			archMatches = strings.Contains(nameLower, "x86_64") || strings.Contains(nameLower, "amd64") ||
+				// Match standalone "x64" (e.g. "linux-x64", "_x64.", "-x64.")
+				// Avoid matching "arm64" which also contains "64"
+				(strings.Contains(nameLower, "x64") && !strings.Contains(nameLower, "arm"))
 		case "arm64", "aarch64":
 			archMatches = strings.Contains(nameLower, "arm64") || strings.Contains(nameLower, "aarch64")
 		case "arm", "armv7":

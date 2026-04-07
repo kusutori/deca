@@ -101,6 +101,12 @@ func TestMatchesOSArch(t *testing.T) {
 		{"tool-amd64.tar.gz", "linux", "x86_64", true},
 		{"tool-arm64.tar.gz", "linux", "aarch64", true},
 		{"tool-aarch64.tar.gz", "linux", "arm64", true},
+
+		// x64 shorthand (common in Electron/AppImage apps)
+		{"Craft-Agents-0.4.8-linux-x64.AppImage", "linux", "amd64", true},
+		{"app-linux-x64.AppImage", "linux", "amd64", true},
+		{"app-mac-arm64.dmg", "linux", "amd64", false},
+		{"app-linux-arm64.AppImage", "linux", "amd64", false},
 	}
 
 	for _, tt := range tests {

@@ -30,12 +30,13 @@ func NewInstaller(binDir string) *Installer {
 
 // InstallResult contains the result of an installation
 type InstallResult struct {
-	Name          string
-	Version       string
-	BinaryPath    string
-	AssetName     string
-	InstallType   config.InstallType
-	SystemPkgName string // Actual package name for system packages (e.g., "fresh-editor" from "fresh_0.1.98.deb")
+	Name                string
+	Version             string
+	BinaryPath          string
+	AssetName           string
+	InstallType         config.InstallType
+	SystemPkgName       string // Actual package name for system packages (e.g., "fresh-editor" from "fresh_0.1.98.deb")
+	VersionedBinaryPath string // Path to versioned binary, set when versioned symlink was created
 }
 
 // Install installs a package from a release
@@ -462,4 +463,54 @@ func expandPath(path string) string {
 		path = strings.ReplaceAll(path, "~", home)
 	}
 	return path
+}
+
+// CreateVersionedSymlink creates a versioned copy of a binary and a symlink pointing to it.
+// The versioned binary is named "<name>-<version>" and the symlink "<name>" points to it.
+// Returns the path to the versioned binary.
+// On Windows, symlinks are not created; the versioned binary is still copied.
+func CreateVersionedSymlink(binDir, name, version, currentBinaryPath string) (string, error) {
+	binDir = expandPath(binDir)
+	// Normalize version: strip leading "v" for the file name suffix
+	versionedName := name + "-" + version
+	if runtime.GOOS == "windows" {
+		versionedName += ".exe"
+	}
+	versionedPath := filepath.Join(binDir, versionedName)
+
+	// Copy the current binary to the versioned path
+	if err := copyFile(currentBinaryPath, versionedPath); err != nil {
+		return "", fmt.Errorf("failed to copy versioned binary: %w", err)
+	}
+	if err := os.Chmod(versionedPath, 0755); err != nil {
+		return "", fmt.Errorf("failed to set permissions on versioned binary: %w", err)
+	}
+
+	// On non-Windows, update symlink to point to the versioned binary
+	if runtime.GOOS != "windows" {
+		// Remove existing symlink or binary at the target path
+		_ = os.Remove(currentBinaryPath)
+		if err := os.Symlink(versionedPath, currentBinaryPath); err != nil {
+			// Restore the binary if symlink creation fails
+			_ = copyFile(versionedPath, currentBinaryPath)
+			return versionedPath, fmt.Errorf("failed to create symlink: %w", err)
+		}
+	}
+
+	return versionedPath, nil
+}
+
+// UninstallVersioned removes the versioned binary and the symlink.
+func UninstallVersioned(symlinkPath, versionedBinaryPath string) error {
+	// Remove the symlink
+	if symlinkPath != "" {
+		_ = os.Remove(symlinkPath)
+	}
+	// Remove the versioned binary
+	if versionedBinaryPath != "" {
+		if err := os.Remove(versionedBinaryPath); err != nil && !os.IsNotExist(err) {
+			return err
+		}
+	}
+	return nil
 }

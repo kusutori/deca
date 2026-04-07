@@ -184,15 +184,33 @@ func installPackage(ctx context.Context, ghClient *github.Client, installer *ins
 		_ = install.RemoveBackup(backupPath)
 	}
 
+	// Create versioned symlink if requested and binary was installed
+	if pkg.Versioned && result.BinaryPath != "" {
+		versionedPath, symlinkErr := install.CreateVersionedSymlink(installer.BinDir, name, release.TagName, result.BinaryPath)
+		if symlinkErr != nil {
+			ui.Warning.Printf("Warning: failed to create versioned symlink for %s: %v\n", name, symlinkErr)
+		} else {
+			result.VersionedBinaryPath = versionedPath
+		}
+	}
+
 	// Update state
 	state.SetPackage(name, config.InstalledPackage{
-		Repo:          pkg.Repo,
-		Version:       release.TagName,
-		AssetName:     asset.Name,
-		InstallType:   result.InstallType,
-		InstalledAt:   time.Now(),
-		SystemPkgName: result.SystemPkgName,
+		Repo:                pkg.Repo,
+		Version:             release.TagName,
+		AssetName:           asset.Name,
+		InstallType:         result.InstallType,
+		InstalledAt:         time.Now(),
+		SystemPkgName:       result.SystemPkgName,
+		VersionedBinaryPath: result.VersionedBinaryPath,
 	})
+
+	// Auto-create desktop entry for AppImage if desktop config is present
+	if result.InstallType == config.InstallTypeAppImage && pkg.Desktop != nil {
+		if desktopErr := generateDesktopEntry(name); desktopErr != nil {
+			ui.Warning.Printf("Warning: failed to create desktop entry for %s: %v\n", name, desktopErr)
+		}
+	}
 
 	// Format result message based on package type
 	oldVersion := strings.TrimPrefix(installed.Version, "v")

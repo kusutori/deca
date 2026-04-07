@@ -62,6 +62,10 @@ Deca 是一个声明式的 GitHub Release 包管理器，通过 TOML 配置文�
 - [x] **进度条** - 下载进度可视化
 - [x] **交互式选择** - 数字选择 asset
 - [x] **版本信息** - git tags 作为版本号
+- [x] **镜像管理** (`deca mirror`) - 支持国内镜像加速
+- [x] **桌面条目** (`deca desktop`) - 生成 Linux .desktop 文件
+- [x] **AppImage 自动桌面条目** - 安装 AppImage 时自动生成 .desktop 文件（配置 `desktop` 块时）
+- [x] **Shell 补全** (`deca completion`) - Carapace 支持的 Shell 补全
 
 ### 测试与质量
 - [x] **单元测试** - 所有核心包覆盖测试
@@ -87,6 +91,7 @@ Deca 是一个声明式的 GitHub Release 包管理器，通过 TOML 配置文�
 - [x] **版本锁定** - 指定固定版本安装
 - [x] **条件匹配** - `os` / `arch` 条件表达式
 - [ ] **嵌套配置** - `[packages.github]` 分段组织
+- [x] **版本化符号链接** - `versioned = true` 保留带版本号的二进制并创建软链接
 
 ### 安装增强
 - [ ] **后安装钩子** - 自定义安装脚本支持
@@ -136,9 +141,9 @@ Deca 是一个声明式的 GitHub Release 包管理器，通过 TOML 配置文�
 - [x] 校验和验证（SHA256/SHA512）
 
 ### v0.3.0 (中期)
+- [x] 版本化符号链接
 - [ ] 多配置支持
 - [ ] 后安装钩子
-- [ ] 版本化 symlink
 - [ ] 社区模板
 
 ### v1.0.0 (长期)
@@ -153,7 +158,7 @@ Deca 是一个声明式的 GitHub Release 包管理器，通过 TOML 配置文�
 ### P1（近期）
 - [ ] 后安装钩子（pre/post install）
 - [ ] 多配置支持（profiles）
-- [ ] 版本化 symlink
+- [x] 版本化 symlink
 - [ ] Windows 安装体验完善（MSI/EXE 逻辑、路径）
 
 ### P2（中期）

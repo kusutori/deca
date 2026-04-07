@@ -80,20 +80,27 @@ func setupAddCompletions() {
 
 // setupRemoveCompletions sets up completions for the remove command
 func setupRemoveCompletions() {
-	carapace.Gen(RemoveCmd).PositionalCompletion(
-		carapace.ActionCallback(func(c carapace.Context) carapace.Action {
-			cfg, err := loadConfig()
-			if err != nil {
-				return carapace.ActionValues()
-			}
+	pkgAction := carapace.ActionCallback(func(c carapace.Context) carapace.Action {
+		cfg, err := loadConfig()
+		if err != nil {
+			return carapace.ActionValues()
+		}
 
-			values := make([]string, 0, len(cfg.Packages))
-			for name := range cfg.Packages {
+		existing := make(map[string]bool, len(c.Args))
+		for _, a := range c.Args {
+			existing[a] = true
+		}
+
+		values := make([]string, 0, len(cfg.Packages))
+		for name := range cfg.Packages {
+			if !existing[name] {
 				values = append(values, name)
 			}
-			return carapace.ActionValues(values...)
-		}),
-	)
+		}
+		return carapace.ActionValues(values...)
+	})
+
+	carapace.Gen(RemoveCmd).PositionalAnyCompletion(pkgAction)
 }
 
 // setupUpdateCompletions sets up completions for the update command

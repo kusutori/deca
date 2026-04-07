@@ -19,12 +19,13 @@ const (
 
 // InstalledPackage represents the state of an installed package
 type InstalledPackage struct {
-	Repo          string      `json:"repo"`
-	Version       string      `json:"version"`
-	AssetName     string      `json:"asset_name,omitempty"`
-	InstallType   InstallType `json:"install_type"`
-	InstalledAt   time.Time   `json:"installed_at"`
-	SystemPkgName string      `json:"system_pkg_name,omitempty"` // Actual package name for system packages
+	Repo                string      `json:"repo"`
+	Version             string      `json:"version"`
+	AssetName           string      `json:"asset_name,omitempty"`
+	InstallType         InstallType `json:"install_type"`
+	InstalledAt         time.Time   `json:"installed_at"`
+	SystemPkgName       string      `json:"system_pkg_name,omitempty"`        // Actual package name for system packages
+	VersionedBinaryPath string      `json:"versioned_binary_path,omitempty"` // Path to versioned binary (e.g. eza-v0.20.0)
 }
 
 // State represents the installation state

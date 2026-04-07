@@ -131,12 +131,10 @@ func DownloadAndExtractWithCache(asset *github.AssetInfo, targetOS, targetArch s
 		result.Files = files
 		result.IsBinary = true
 	case strings.HasSuffix(asset.Name, ".exe"):
-		// Windows executable - just copy
-		result.Files = []string{downloadPath}
+		result.Files = []string{filepath.Base(asset.Name)}
 		result.IsBinary = true
 	default:
-		// Assume it's a single binary
-		result.Files = []string{downloadPath}
+		result.Files = []string{filepath.Base(asset.Name)}
 		result.IsBinary = true
 	}
 

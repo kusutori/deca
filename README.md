@@ -112,6 +112,7 @@ check_interval = "24h"
 | `deca cache list` | 列出缓存文件 |
 | `deca cache size` | 显示缓存大小 |
 | `deca cache clean` | 清理缓存 |
+| `deca schema` | 生成 `deca.toml` 的 JSON Schema |
 | `deca mirror` | 显示当前镜像源 |
 | `deca mirror list` | 列出可用镜像源 |
 | `deca mirror select` | 交互式选择镜像源 |
@@ -252,6 +253,46 @@ deca mirror add "My Mirror" https://mirror.example.com
 ```bash
 export GITHUB_TOKEN="your_token_here"
 ```
+
+## Python 绑定（gopy）
+
+项目现在提供了用于 gopy 的 Go API 包：`github.com/deca-org/deca/pkg/pydeca`。
+
+### 1) 安装生成工具
+
+```bash
+just setup-python-bindings
+```
+
+### 2) 生成 Python 包
+
+```bash
+just python-bindings
+python3 -m pip install -e bindings/python
+```
+
+### 3) 在 Python 中调用
+
+```python
+from deca_py import pydeca
+
+# 直接调用导出函数
+schema_json = pydeca.GenerateSchemaJSON()
+print(schema_json[:80])
+
+# 使用 Client 调用 CLI 能力
+c = pydeca.NewDefaultClient()
+code = c.Run(["status"])
+print("exit:", code)
+```
+
+可用 API（节选）：
+- `pydeca.GenerateSchemaJSON()`
+- `pydeca.WriteSchema(path)`
+- `pydeca.LoadConfigJSON(path)`
+- `pydeca.ListPackageNames(path)`
+- `pydeca.InjectSchema(config_path, schema_path)`
+- `pydeca.Client.Run(args)`
 
 ## 构建
 

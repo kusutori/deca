@@ -16,16 +16,19 @@ import (
 
 // AddCmd adds a package
 var AddCmd = &cobra.Command{
-	Use:   "add <owner/repo> [--name <name>]",
+	Use:   "add <owner/repo> ... [--name <name>]",
 	Short: "Add a package to the configuration",
 	Long: `Add a package to the configuration and install it.
 
 This command adds a new package to the configuration file and
 optionally installs it immediately.
 
+Multiple packages can be added at once by specifying multiple owner/repo arguments.
+When adding multiple packages, --name flag is ignored and repo name is used.
+
 Use --interactive to see all available assets and select one.
 Use --asset to specify which asset to download.`,
-	Args: cobra.ExactArgs(1),
+	Args: cobra.MinimumNArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		name, _ := cmd.Flags().GetString("name")
 		asset, _ := cmd.Flags().GetString("asset")
@@ -34,63 +37,64 @@ Use --asset to specify which asset to download.`,
 		arch, _ := cmd.Flags().GetString("arch")
 		noInstall, _ := cmd.Flags().GetBool("no-install")
 
-		repo := args[0]
-
-		// Validate repo format
-		owner, repoName, err := github.ParseRepo(repo)
-		if err != nil {
-			return fmt.Errorf("invalid repo format: %w", err)
-		}
-
-		// Use repo name as package name if not specified
-		if name == "" {
-			name = repoName
-		}
-
-		// If interactive mode, show all assets and let user select
-		if interactive {
-			selectedAsset, err := interactiveSelectAsset(owner, repoName)
-			if err != nil {
-				return fmt.Errorf("interactive selection failed: %w", err)
-			}
-			if selectedAsset != nil {
-				asset = selectedAsset.Name
-			}
-		}
-
 		// Load config
 		cfg, err := loadConfig()
 		if err != nil {
 			return fmt.Errorf("failed to load config: %w", err)
 		}
 
-		// Add package to config
 		if cfg.Packages == nil {
 			cfg.Packages = make(map[string]config.Package)
 		}
 
-		cfg.Packages[name] = config.Package{
-			Repo:  repo,
-			Asset: asset,
-			OS:    osFlag,
-			Arch:  arch,
-		}
+		ghClient := github.NewClient()
+		installer := install.NewInstaller(cfg.BinDir)
 
-		// Save config
-		configPath := getConfigPath()
-		if err := config.Save(cfg, configPath); err != nil {
-			return fmt.Errorf("failed to save config: %w", err)
-		}
+		for _, repo := range args {
+			owner, repoName, err := github.ParseRepo(repo)
+			if err != nil {
+				return fmt.Errorf("invalid repo format %q: %w", repo, err)
+			}
 
-		ui.Success.Printf("Added %s -> %s\n", name, repo)
-		if asset != "" {
-			ui.SearchMeta.Printf("  Asset: %s\n", asset)
-		}
+			pkgName := name
+			if len(args) > 1 || pkgName == "" {
+				pkgName = repoName
+			}
 
-		// Install if requested
-		if !noInstall {
-			pkg := cfg.Packages[name]
-			return doInstall(cmd.Context(), github.NewClient(), install.NewInstaller(cfg.BinDir), name, &pkg)
+			pkgAsset := asset
+			if interactive {
+				selectedAsset, err := interactiveSelectAsset(owner, repoName)
+				if err != nil {
+					return fmt.Errorf("interactive selection failed for %s: %w", repo, err)
+				}
+				if selectedAsset != nil {
+					pkgAsset = selectedAsset.Name
+				}
+			}
+
+			cfg.Packages[pkgName] = config.Package{
+				Repo:  repo,
+				Asset: pkgAsset,
+				OS:    osFlag,
+				Arch:  arch,
+			}
+
+			configPath := getConfigPath()
+			if err := config.Save(cfg, configPath); err != nil {
+				return fmt.Errorf("failed to save config: %w", err)
+			}
+
+			ui.Success.Printf("Added %s -> %s\n", pkgName, repo)
+			if pkgAsset != "" {
+				ui.SearchMeta.Printf("  Asset: %s\n", pkgAsset)
+			}
+
+			if !noInstall {
+				pkg := cfg.Packages[pkgName]
+				if err := doInstall(cmd.Context(), ghClient, installer, pkgName, &pkg); err != nil {
+					return err
+				}
+			}
 		}
 
 		return nil
@@ -171,19 +175,37 @@ func doInstall(ctx context.Context, ghClient *github.Client, installer *install.
 		return fmt.Errorf("%s: failed to install: %w", name, err)
 	}
 
+	// Create versioned symlink if requested and binary was installed
+	if pkg.Versioned && result.BinaryPath != "" {
+		versionedPath, symlinkErr := install.CreateVersionedSymlink(installer.BinDir, name, release.TagName, result.BinaryPath)
+		if symlinkErr != nil {
+			ui.Warning.Printf("Warning: failed to create versioned symlink: %v\n", symlinkErr)
+		} else {
+			result.VersionedBinaryPath = versionedPath
+		}
+	}
+
 	// Update state
 	statePath := config.DefaultStatePath()
 	state, err := config.LoadState(statePath)
 	if err == nil {
 		state.SetPackage(name, config.InstalledPackage{
-			Repo:          pkg.Repo,
-			Version:       release.TagName,
-			AssetName:     asset.Name,
-			InstallType:   result.InstallType,
-			InstalledAt:   time.Now(),
-			SystemPkgName: result.SystemPkgName,
+			Repo:                pkg.Repo,
+			Version:             release.TagName,
+			AssetName:           asset.Name,
+			InstallType:         result.InstallType,
+			InstalledAt:         time.Now(),
+			SystemPkgName:       result.SystemPkgName,
+			VersionedBinaryPath: result.VersionedBinaryPath,
 		})
 		state.SaveState(statePath)
+	}
+
+	// Auto-create desktop entry for AppImage if desktop config is present
+	if result.InstallType == config.InstallTypeAppImage && pkg.Desktop != nil {
+		if desktopErr := generateDesktopEntry(name); desktopErr != nil {
+			ui.Warning.Printf("Warning: failed to create desktop entry: %v\n", desktopErr)
+		}
 	}
 
 	// Print success message
