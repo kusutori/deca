@@ -6,18 +6,18 @@ Deca is a Go CLI. The entry point is `main.go`, which calls `cmd.Execute()`. Cor
 - `cmd/`: Cobra CLI commands and flags (e.g., `cmd/root.go`).
 - `internal/`: Non-exported application logic (cache, config, download, github, install, ui).
 - `pkg/`: Shared utilities that may be imported by other modules.
-- `deca/`: Built binary output from `make build` (ignored in git).
+- `deca`: Built binary output from `pixi run build` (ignored in git).
 - `README.md` and `CLAUDE.md`: user and contributor guidance.
 
 ## Build, Test, and Development Commands
-Use the Makefile for consistent builds:
+Use Pixi tasks for consistent builds:
 
-- `make build`: compile `deca` with version info.
-- `make debug`: build with debug symbols.
-- `make test` or `go test ./...`: run all tests.
-- `make static`: fully static Linux build (requires `musl-gcc`).
-- `make release` / `make musl-release`: cross-platform release binaries.
-- `make version`: print build metadata.
+- `pixi run build`: compile `deca` with version info.
+- `pixi run debug`: build with debug symbols.
+- `pixi run test` or `go test ./...`: run all tests.
+- `pixi run static`: fully static Linux build (requires `musl-gcc`).
+- `pixi run release` / `pixi run musl-release`: cross-platform release binaries.
+- `pixi run info`: print build metadata.
 
 ## Coding Style & Naming Conventions
 This repo follows standard Go conventions:

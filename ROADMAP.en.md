@@ -71,7 +71,7 @@ Deca is a declarative GitHub Release package manager that installs and updates C
 - [x] Unit tests for core packages
 - [x] Integration tests for core command flows
 - [x] Security tests for tar path traversal protections
-- [x] Standardized build flow with Makefile
+- [x] Standardized build flow with pixi.toml
 - [x] Basic GitHub Actions CI
 - [x] Coverage reporting (target >80%)
 

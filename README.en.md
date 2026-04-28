@@ -19,7 +19,7 @@ Deca is a declarative package manager for command-line tools. It downloads binar
 # Build from source
 git clone https://github.com/kusutori/deca.git
 cd deca
-make build
+pixi run build
 ./deca init
 
 # Or move to a global bin dir
@@ -242,7 +242,7 @@ just setup-python-bindings
 ### 2) Generate Python package
 
 ```bash
-just python-bindings
+pixi run python-bindings
 python3 -m pip install -e bindings/python
 ```
 
@@ -262,12 +262,12 @@ print("exit:", code)
 ## Build
 
 ```bash
-make build
-make test
-make release
-make static
-make musl-release
-make clean
+pixi run build
+pixi run test
+pixi run release
+pixi run static
+pixi run musl-release
+pixi run clean
 ```
 
 ### glibc Compatibility
@@ -278,7 +278,7 @@ Recommended: static build with musl.
 
 ```bash
 sudo apt install musl-tools
-make static
+pixi run static
 ```
 
 ## Project Structure
@@ -293,7 +293,7 @@ deca/
 │   ├── install/
 │   ├── cache/
 │   └── ui/
-├── Makefile
+├── pixi.toml
 └── README.md
 ```
 

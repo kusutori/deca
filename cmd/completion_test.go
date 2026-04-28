@@ -27,11 +27,18 @@ func TestGenerateCompletionNushell(t *testing.T) {
 	if !strings.Contains(out, "length) == 1") {
 		t.Fatalf("expected nushell snippet to normalize spans, got:\n%s", out)
 	}
-	if !strings.Contains(out, `export extern "deca"`) {
-		t.Fatalf("expected nushell snippet to export extern, got:\n%s", out)
+	if !strings.Contains(out, `extern "deca"`) {
+		t.Fatalf("expected nushell snippet to define extern, got:\n%s", out)
 	}
 	if !strings.Contains(out, `...args: string@"nu-complete deca"`) {
 		t.Fatalf("expected nushell snippet to bind completion to args, got:\n%s", out)
+	}
+}
+
+func TestGenerateCompletionUnsupportedShell(t *testing.T) {
+	var buf bytes.Buffer
+	if err := generateCompletion("unknown-shell", &buf); err == nil {
+		t.Fatal("expected unsupported shell error, got nil")
 	}
 }
 

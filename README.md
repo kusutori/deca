@@ -19,7 +19,7 @@
 # 从源码构建
 git clone https://github.com/kusutori/deca.git
 cd deca
-make build
+pixi run build
 ./deca init  # 初始化配置
 
 # 或全局安装
@@ -267,7 +267,7 @@ just setup-python-bindings
 ### 2) 生成 Python 包
 
 ```bash
-just python-bindings
+pixi run python-bindings
 python3 -m pip install -e bindings/python
 ```
 
@@ -297,12 +297,12 @@ print("exit:", code)
 ## 构建
 
 ```bash
-make build          # 构建（带版本信息）
-make test           # 运行测试
-make release        # 跨平台构建（动态链接）
-make static         # 静态链接构建（兼容旧系统）
-make musl-release   # musl 静态构建（推荐用于 Linux）
-make clean          # 清理
+pixi run build          # 构建（带版本信息）
+pixi run test           # 运行测试
+pixi run release        # 跨平台构建（动态链接）
+pixi run static         # 静态链接构建（兼容旧系统）
+pixi run musl-release   # musl 静态构建（推荐用于 Linux）
+pixi run clean          # 清理
 ```
 
 ### glibc 兼容性
@@ -318,7 +318,7 @@ make clean          # 清理
 sudo apt install musl-tools
 
 # 构建静态链接版本
-make static
+pixi run static
 ```
 
 生成的静态二进制可以在几乎所有 Linux 发行版上运行，包括：
@@ -352,7 +352,7 @@ deca/
 │   ├── install/      # 安装（支持系统包）
 │   ├── cache/        # 缓存管理
 │   └── ui/           # UI（颜色、交互选择）
-├── Makefile          # 构建脚本
+├── pixi.toml          # 构建脚本
 └── README.md
 ```
 

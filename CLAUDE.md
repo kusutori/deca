@@ -12,10 +12,10 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Build Commands
 
 ```bash
-make build          # Build with version info (outputs 'deca')
-make debug          # Build with debug symbols
-make test           # Run all tests
-make release        # Cross-platform build (linux/darwin/windows, amd64/arm64)
+pixi run build      # Build with version info (outputs 'deca')
+pixi run debug      # Build with debug symbols
+pixi run test       # Run all tests
+pixi run release    # Cross-platform build (linux/darwin/windows, amd64/arm64)
 go test ./...       # Run all tests
 ```
 
