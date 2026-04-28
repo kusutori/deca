@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **Deca** is a GitHub Release package manager written in Go. It downloads and manages binaries from GitHub Releases using a declarative TOML configuration file.
 
-- **Module**: `github.com/deca-org/deca`
+- **Module**: `github.com/kusutori/deca`
 - **Entry**: `main.go` calls `cmd.Execute()`
 
 ## Build Commands
@@ -88,7 +88,7 @@ Native binary > tar.gz > .deb > AppImage > .rpm (system packages use apt/dnf)
 
 Version info set at build time:
 ```bash
-ldflags = "-X github.com/deca-org/deca/cmd.Version=$(git describe --tags --always)"
+ldflags = "-X github.com/kusutori/deca/cmd.Version=$(git describe --tags --always)"
 ```
 
 ## Technical Debt & Known Issues

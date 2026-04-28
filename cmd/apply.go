@@ -8,11 +8,11 @@ import (
 	"sync"
 	"time"
 
-	"github.com/deca-org/deca/internal/config"
-	decaerrors "github.com/deca-org/deca/internal/errors"
-	"github.com/deca-org/deca/internal/github"
-	"github.com/deca-org/deca/internal/install"
-	"github.com/deca-org/deca/internal/ui"
+	"github.com/kusutori/deca/internal/config"
+	decaerrors "github.com/kusutori/deca/internal/errors"
+	"github.com/kusutori/deca/internal/github"
+	"github.com/kusutori/deca/internal/install"
+	"github.com/kusutori/deca/internal/ui"
 	"github.com/spf13/cobra"
 	"golang.org/x/sync/errgroup"
 )

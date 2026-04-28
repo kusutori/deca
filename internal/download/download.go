@@ -12,8 +12,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/deca-org/deca/internal/cache"
-	"github.com/deca-org/deca/internal/github"
+	"github.com/kusutori/deca/internal/cache"
+	"github.com/kusutori/deca/internal/github"
 	"github.com/mattn/go-isatty"
 	"github.com/schollz/progressbar/v3"
 	"github.com/ulikunitz/xz"

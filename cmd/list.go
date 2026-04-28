@@ -5,9 +5,9 @@ import (
 	"os"
 	"runtime"
 
-	"github.com/deca-org/deca/internal/config"
-	"github.com/deca-org/deca/internal/install"
-	"github.com/deca-org/deca/internal/ui"
+	"github.com/kusutori/deca/internal/config"
+	"github.com/kusutori/deca/internal/install"
+	"github.com/kusutori/deca/internal/ui"
 	"github.com/fatih/color"
 	"github.com/spf13/cobra"
 )

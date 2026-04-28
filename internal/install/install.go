@@ -10,10 +10,10 @@ import (
 	"strings"
 	"syscall"
 
-	"github.com/deca-org/deca/internal/config"
-	"github.com/deca-org/deca/internal/download"
-	"github.com/deca-org/deca/internal/github"
-	"github.com/deca-org/deca/internal/ui"
+	"github.com/kusutori/deca/internal/config"
+	"github.com/kusutori/deca/internal/download"
+	"github.com/kusutori/deca/internal/github"
+	"github.com/kusutori/deca/internal/ui"
 )
 
 var downloadFileFunc = download.DownloadFile

@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/deca-org/deca/internal/errors"
+	"github.com/kusutori/deca/internal/errors"
 )
 
 // PrintDecaError prints an error with optional suggestion

@@ -6,7 +6,7 @@ import (
 	"runtime"
 	"strings"
 
-	"github.com/deca-org/deca/internal/config"
+	"github.com/kusutori/deca/internal/config"
 )
 
 // BinaryPath returns the installed binary path for a package.

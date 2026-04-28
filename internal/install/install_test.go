@@ -7,8 +7,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/deca-org/deca/internal/config"
-	"github.com/deca-org/deca/internal/github"
+	"github.com/kusutori/deca/internal/config"
+	"github.com/kusutori/deca/internal/github"
 )
 
 func TestNewInstaller(t *testing.T) {

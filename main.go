@@ -3,7 +3,7 @@ package main
 import (
 	"os"
 
-	"github.com/deca-org/deca/cmd"
+	"github.com/kusutori/deca/cmd"
 )
 
 func main() {

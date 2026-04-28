@@ -2,7 +2,7 @@ package cmd
 
 import (
 	"github.com/carapace-sh/carapace"
-	"github.com/deca-org/deca/internal/github"
+	"github.com/kusutori/deca/internal/github"
 )
 
 func init() {

@@ -17,7 +17,7 @@
 
 ```bash
 # 从源码构建
-git clone https://github.com/deca-org/deca.git
+git clone https://github.com/kusutori/deca.git
 cd deca
 make build
 ./deca init  # 初始化配置
@@ -256,7 +256,7 @@ export GITHUB_TOKEN="your_token_here"
 
 ## Python 绑定（gopy）
 
-项目现在提供了用于 gopy 的 Go API 包：`github.com/deca-org/deca/pkg/pydeca`。
+项目现在提供了用于 gopy 的 Go API 包：`github.com/kusutori/deca/pkg/pydeca`。
 
 ### 1) 安装生成工具
 

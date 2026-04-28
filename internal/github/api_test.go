@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/deca-org/deca/internal/config"
+	"github.com/kusutori/deca/internal/config"
 )
 
 func TestParseRepo(t *testing.T) {

@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/deca-org/deca/internal/github"
+	"github.com/kusutori/deca/internal/github"
 )
 
 // PrintAssetTable prints a simple ASCII table of assets and lets user select

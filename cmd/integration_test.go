@@ -19,7 +19,7 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/deca-org/deca/internal/config"
+	"github.com/kusutori/deca/internal/config"
 )
 
 type apiServerState struct {

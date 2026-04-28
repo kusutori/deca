@@ -7,7 +7,7 @@ import (
 	"runtime"
 	"strings"
 
-	"github.com/deca-org/deca/internal/ui"
+	"github.com/kusutori/deca/internal/ui"
 	"github.com/fatih/color"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
@@ -35,7 +35,7 @@ var RootCmd = &cobra.Command{
 	Long: `Deca is a GitHub Release package manager that downloads and manages
 binaries from GitHub Releases.
 
-Find more information at: https://github.com/deca-org/deca`,
+Find more information at: https://github.com/kusutori/deca`,
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
 		return nil
 	},

@@ -3,8 +3,8 @@ package cmd
 import (
 	"fmt"
 
-	"github.com/deca-org/deca/internal/github"
-	"github.com/deca-org/deca/internal/ui"
+	"github.com/kusutori/deca/internal/github"
+	"github.com/kusutori/deca/internal/ui"
 	"github.com/spf13/cobra"
 )
 

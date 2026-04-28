@@ -11,7 +11,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/deca-org/deca/internal/config"
+	"github.com/kusutori/deca/internal/config"
 	"github.com/google/go-github/v60/github"
 	"golang.org/x/sync/errgroup"
 )

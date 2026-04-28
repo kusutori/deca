@@ -8,8 +8,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/deca-org/deca/internal/config"
-	"github.com/deca-org/deca/internal/ui"
+	"github.com/kusutori/deca/internal/config"
+	"github.com/kusutori/deca/internal/ui"
 	"github.com/spf13/cobra"
 )
 

@@ -1,4 +1,4 @@
-module github.com/deca-org/deca
+module github.com/kusutori/deca
 
 go 1.25.0
 

@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/deca-org/deca/internal/config"
-	"github.com/deca-org/deca/internal/github"
+	"github.com/kusutori/deca/internal/config"
+	"github.com/kusutori/deca/internal/github"
 )
 
 func releaseForPackage(ctx context.Context, ghClient *github.Client, owner, repo string, pkg *config.Package) (*github.ReleaseInfo, error) {

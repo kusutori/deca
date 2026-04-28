@@ -5,9 +5,9 @@ import (
 	"path/filepath"
 	"sort"
 
-	"github.com/deca-org/deca/cmd"
-	"github.com/deca-org/deca/internal/config"
-	"github.com/deca-org/deca/internal/schema"
+	"github.com/kusutori/deca/cmd"
+	"github.com/kusutori/deca/internal/config"
+	"github.com/kusutori/deca/internal/schema"
 )
 
 // Client is a Python-friendly wrapper around Deca operations.
