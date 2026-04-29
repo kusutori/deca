@@ -1,189 +1,189 @@
-# Deca 路线图
+# Deca Roadmap
 
-## 项目愿景
+## Vision
 
-Deca 是一个声明式的 GitHub Release 包管理器，通过 TOML 配置文件管理命令行工具的安装和更新。
-
----
-
-## 已完成功能 ✓
-
-### 核心功能
-- [x] **声明式配置** - TOML 格式支持简单和完整两种格式
-- [x] **配置解析** - 支持 `bin_dir`、`[packages]`、`[settings]` 段落
-- [x] **状态管理** - JSON 格式记录已安装包信息
-- [x] **跨平台支持** - Linux、macOS、Windows
-- [x] **系统检测** - 自动检测 OS/Arch/发行版/包管理器
-
-### GitHub 集成
-- [x] **Release 获取** - 获取最新 Release 信息
-- [x] **Asset 匹配** - 基于 OS/Arch 自动选择
-- [x] **Pattern 匹配** - 支持 glob 模式过滤
-- [x] **仓库搜索** - GitHub API 搜索仓库
-- [x] **Asset 优先级** - native > tar.gz > .deb > AppImage > .rpm
-- [x] **Linux 匹配优化** - 排除 freebsd/openbsd/netbsd 等误匹配
-
-### 下载与安装
-- [x] **HTTP 下载** - 下载 Release Asset
-- [x] **下载进度条** - 可视化显示下载进度
-- [x] **下载缓存** - 避免重复下载
-- [x] **tar.gz 提取** - 安全提取（路径遍历防护）
-- [x] **.tar.xz 提取** - 支持 tar.xz 格式
-- [x] **zip 提取** - 支持 zip 格式
-- [x] **二进制安装** - 复制到 bin_dir 并设置权限
-- [x] **AppImage 支持** - 直接复制，设置执行权限
-- [x] **系统包支持** - .deb (apt)、.rpm (dnf/yum) 需要 sudo
-- [x] **状态更新** - 安装后更新状态文件（包含安装类型）
-- [x] **临时目录管理** - 修复提取后清理问题
-- [x] **智能卸载** - 根据安装类型选择卸载方式
-- [x] **回滚支持** - 更新失败时回滚
-
-### CLI 命令
-- [x] `deca apply` - 应用配置，安装/更新所有包
-- [x] `deca add` - 添加新包到配置
-- [x] `deca add -i/--interactive` - 交互式 asset 选择
-- [x] `deca add --asset` - 指定 asset 模式
-- [x] `deca remove` - 卸载并从配置移除包
-- [x] `deca remove -k/--keep-installed` - 仅从配置移除，保留安装
-- [x] `deca list` - 列出已配置的包
-- [x] `deca status` - 检查更新
-- [x] `deca update` - 更新包到最新版本
-- [x] `deca search` - 搜索 GitHub 仓库
-- [x] `deca doctor` - 健康检查
-- [x] `deca init` - 初始化配置，检测系统信息
-- [x] `deca config` - 查看/编辑配置文件
-- [x] `deca --version` - 显示版本信息
-- [x] `deca --dry-run` - 预览操作而不执行
-- [x] `deca -v/--verbose` - 详细输出模式
-
-### UI/UX
-- [x] **彩色输出** - 不同类型信息使用不同颜色
-- [x] **彩色帮助** - help 命令的彩色格式化输出
-- [x] **进度条** - 下载进度可视化
-- [x] **交互式选择** - 数字选择 asset
-- [x] **版本信息** - git tags 作为版本号
-- [x] **镜像管理** (`deca mirror`) - 支持国内镜像加速
-- [x] **桌面条目** (`deca desktop`) - 生成 Linux .desktop 文件
-- [x] **AppImage 自动桌面条目** - 安装 AppImage 时自动生成 .desktop 文件（配置 `desktop` 块时）
-- [x] **Shell 补全** (`deca completion`) - Carapace 支持的 Shell 补全
-
-### 测试与质量
-- [x] **单元测试** - 所有核心包覆盖测试
-- [x] **集成测试** - cmd 端到端集成测试覆盖核心流程
-- [x] **安全测试** - tar 路径遍历防护测试
-- [x] **pixi.toml** - 标准化构建流程
-- [x] **CI/CD 流水线** - GitHub Actions 基础测试
-- [x] **代码覆盖率报告** - 覆盖率门槛 (>80%)
+Deca is a declarative GitHub Release package manager that installs and updates CLI tools through a TOML config file.
 
 ---
 
-## 待开发功能 📋
+## Completed ✓
 
-### 改进 Asset 提取
-- [x] 支持 `.tar.xz` 格式
-- [x] 校验和验证（SHA256/SHA512）
+### Core
+- [x] Declarative configuration (short and full TOML package formats)
+- [x] Config parsing for `bin_dir`, `[packages]`, `[settings]`
+- [x] State management via JSON
+- [x] Cross-platform support (Linux, macOS, Windows)
+- [x] System detection (OS/Arch/distro/package manager)
 
-### 用户体验
-- [x] 配置差异显示 (`deca diff`)
-- [x] 错误处理改进（错误代码、友好提示）
+### GitHub Integration
+- [x] Fetch latest release information
+- [x] Asset matching by OS/Arch
+- [x] Glob pattern filtering
+- [x] GitHub repository search
+- [x] Asset priority: native > tar.gz > .deb > AppImage > .rpm
+- [x] Linux matcher optimization (avoid false matches like freebsd/openbsd/netbsd)
 
-### 配置增强
-- [x] **版本锁定** - 指定固定版本安装
-- [x] **条件匹配** - `os` / `arch` 条件表达式
-- [ ] **嵌套配置** - `[packages.github]` 分段组织
-- [x] **版本化符号链接** - `versioned = true` 保留带版本号的二进制并创建软链接
+### Download & Install
+- [x] HTTP download for release assets
+- [x] Download progress bar
+- [x] Download cache
+- [x] Secure tar.gz extraction (path traversal protection)
+- [x] `.tar.xz` extraction support
+- [x] zip extraction support
+- [x] Binary install (copy to `bin_dir` + permissions)
+- [x] AppImage support
+- [x] System package support (`.deb` via apt, `.rpm` via dnf/yum, requires sudo)
+- [x] State updates after install (including install type)
+- [x] Temp directory lifecycle cleanup fixes
+- [x] Smart uninstall by install type
+- [x] Rollback on failed update
 
-### 安装增强
-- [ ] **后安装钩子** - 自定义安装脚本支持
-- [ ] **符号链接** - 创建版本化 symlink
+### CLI Commands
+- [x] `deca apply`
+- [x] `deca add`
+- [x] `deca add -i/--interactive`
+- [x] `deca add --asset`
+- [x] `deca remove`
+- [x] `deca remove -k/--keep-installed`
+- [x] `deca list`
+- [x] `deca status`
+- [x] `deca update`
+- [x] `deca search`
+- [x] `deca doctor`
+- [x] `deca init`
+- [x] `deca config`
+- [x] `deca --version`
+- [x] `deca --dry-run`
+- [x] `deca -v/--verbose`
 
-### 生态集成
-- [ ] **模板市场** - 社区配置模板
-- [ ] **Webhook 通知** - 更新时发送通知
-- [ ] **自更新** - deca 自身通过 deca 更新
+### UX
+- [x] Colored output
+- [x] Colored help formatting
+- [x] Download progress UI
+- [x] Interactive numeric asset picker
+- [x] Version display via git tags
+- [x] Mirror management (`deca mirror`)
+- [x] Desktop entry generation (`deca desktop`)
+- [x] Auto desktop entry for AppImage when `desktop` block is configured
+- [x] Shell completion (`deca completion`) with Carapace
 
-### 平台支持
-- [ ] **Homebrew 导入** - 从 Homebrew 迁移
-- [ ] **Scoop 导入** - 从 Scoop 迁移
-- [ ] **插件系统** - 自定义安装逻辑
-
----
-
-## 技术债务
-
-### 代码质量
-- [ ] 增加 E2E 测试
-
-### 文档
-- [ ] API 文档
-- [x] 贡献指南（AGENTS.md）
-- [ ] 插件开发文档
-
----
-
-## 版本规划
-
-### v0.1.0 ✓ (当前)
-- [x] 基础功能可用
-- [x] 单元测试覆盖
-- [x] README 文档
-- [x] 系统包支持 (.deb/.rpm)
-- [x] 交互式 asset 选择
-- [x] 下载进度条
-- [x] init/config 命令
-- [x] 彩色输出和帮助信息
-- [x] Linux asset 匹配优化
-
-### v0.2.0 ✓ (短期)
-- [x] 改进下载和提取逻辑 (.tar.xz)
-- [x] 更好的错误处理（错误代码、友好提示）
-- [x] 配置 diff 功能
-- [x] 校验和验证（SHA256/SHA512）
-
-### v0.3.0 (中期)
-- [x] 版本化符号链接
-- [ ] 多配置支持
-- [ ] 后安装钩子
-- [ ] 社区模板
-
-### v1.0.0 (长期)
-- [ ] 稳定 API
-- [ ] 完整文档
-- [ ] 丰富测试
+### Testing & Quality
+- [x] Unit tests for core packages
+- [x] Integration tests for core command flows
+- [x] Security tests for tar path traversal protections
+- [x] Standardized build flow with pixi.toml
+- [x] Basic GitHub Actions CI
+- [x] Coverage reporting (target >80%)
 
 ---
 
-## 下一步计划（当前）
+## Planned 📋
 
-### P1（近期）
-- [ ] 后安装钩子（pre/post install）
-- [ ] 多配置支持（profiles）
-- [x] 版本化 symlink
-- [ ] Windows 安装体验完善（MSI/EXE 逻辑、路径）
+### Asset Handling
+- [x] `.tar.xz` support
+- [x] Checksum verification (SHA256/SHA512)
 
-### P2（中期）
-- [ ] E2E 测试（真实下载/安装的隔离环境）
-- [ ] 自更新
-- [ ] Homebrew/Scoop 导入
-- [ ] 模板市场/社区模板
+### User Experience
+- [x] Config diff display (`deca diff`)
+- [x] Better error handling (error codes + friendlier hints)
 
-### P3（长期）
-- [ ] 插件系统
+### Config Enhancements
+- [x] Version pinning
+- [x] Conditional matching (`os` / `arch` expressions)
+- [ ] Nested config groups (`[packages.github]`)
+- [x] Versioned symlink support (`versioned = true`)
+
+### Installation Enhancements
+- [ ] Post-install hooks (custom scripts)
+- [ ] Symbolic links (versioned symlink workflows)
+
+### Ecosystem Integrations
+- [ ] Template marketplace
+- [ ] Webhook notifications for updates
+- [ ] Self-update via deca itself
+
+### Platform Integrations
+- [ ] Homebrew import/migration
+- [ ] Scoop import/migration
+- [ ] Plugin system for custom installers
 
 ---
 
-## 贡献指南
+## Tech Debt
 
-欢迎贡献！请查看 GitHub Issues 获取任务。
+### Code Quality
+- [ ] Add E2E tests
 
-### 开发流程
-1. Fork 项目
-2. 创建功能分支
-3. 编写测试
-4. 确保测试通过
-5. 提交 PR
+### Documentation
+- [ ] API docs
+- [x] Contribution guide (AGENTS.md)
+- [ ] Plugin development docs
 
-### 代码风格
-- 遵循 Go 代码规范
-- 保持函数简洁
-- 添加必要注释
+---
+
+## Version Plan
+
+### v0.1.0 ✓ (current)
+- [x] Core functionality available
+- [x] Unit tests
+- [x] README
+- [x] System package support (.deb/.rpm)
+- [x] Interactive asset selection
+- [x] Download progress bar
+- [x] init/config commands
+- [x] Colored output and help
+- [x] Linux asset match optimization
+
+### v0.2.0 ✓ (short term)
+- [x] Improved download/extraction (`.tar.xz`)
+- [x] Better error handling
+- [x] Config diff
+- [x] Checksum verification
+
+### v0.3.0 (mid term)
+- [x] Versioned symlink
+- [ ] Multi-config support
+- [ ] Post-install hooks
+- [ ] Community templates
+
+### v1.0.0 (long term)
+- [ ] Stable API
+- [ ] Complete documentation
+- [ ] Broader test coverage
+
+---
+
+## Next Steps (Current)
+
+### P1 (near term)
+- [ ] Post-install hooks (pre/post install)
+- [ ] Multi-config support (profiles)
+- [x] Versioned symlink
+- [ ] Improve Windows install UX (MSI/EXE logic + paths)
+
+### P2 (mid term)
+- [ ] E2E tests (isolated real download/install scenarios)
+- [ ] Self-update
+- [ ] Homebrew/Scoop import
+- [ ] Template marketplace/community templates
+
+### P3 (long term)
+- [ ] Plugin system
+
+---
+
+## Contributing
+
+Contributions are welcome. Please check GitHub Issues for open work.
+
+### Development Flow
+1. Fork the project
+2. Create a feature branch
+3. Add tests
+4. Ensure all tests pass
+5. Open a PR
+
+### Code Style
+- Follow standard Go conventions
+- Keep functions concise
+- Add necessary comments
