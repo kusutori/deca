@@ -2,6 +2,7 @@ package errors
 
 import (
 	"errors"
+	"strings"
 	"testing"
 )
 
@@ -144,6 +145,122 @@ func TestErrorTypes(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			if tt.code == "" {
 				t.Errorf("error code %s is empty", tt.name)
+			}
+		})
+	}
+}
+
+func TestDecaErrorErrorWithoutParent(t *testing.T) {
+	err := NewDecaError(ErrCodeNotFound, "not found")
+	if got := err.Error(); got != "not found" {
+		t.Fatalf("expected plain message, got %q", got)
+	}
+}
+
+func TestFactoryFunctions(t *testing.T) {
+	base := errors.New("boom")
+	tests := []struct {
+		name            string
+		err             *DecaError
+		wantCode        Code
+		wantMsgContains string
+		wantSuggest     string
+		wantParent      bool
+	}{
+		{
+			name:            "config invalid",
+			err:             NewConfigInvalidError("bad field"),
+			wantCode:        ErrCodeConfigInvalid,
+			wantMsgContains: "invalid config: bad field",
+			wantSuggest:     "Check your config file syntax",
+		},
+		{
+			name:            "network",
+			err:             NewNetworkError(base),
+			wantCode:        ErrCodeNetwork,
+			wantMsgContains: "network error",
+			wantSuggest:     "Check your internet connection",
+			wantParent:      true,
+		},
+		{
+			name:            "github",
+			err:             NewGitHubAPIError(base),
+			wantCode:        ErrCodeGitHubAPI,
+			wantMsgContains: "GitHub API error",
+			wantSuggest:     "Check your GitHub token or try again later",
+			wantParent:      true,
+		},
+		{
+			name:            "download",
+			err:             NewDownloadError("tool.tar.gz", base),
+			wantCode:        ErrCodeDownloadFailed,
+			wantMsgContains: "failed to download tool.tar.gz",
+			wantParent:      true,
+		},
+		{
+			name:            "install",
+			err:             NewInstallError("tool", base),
+			wantCode:        ErrCodeInstallFailed,
+			wantMsgContains: "failed to install tool",
+			wantParent:      true,
+		},
+		{
+			name:            "extract",
+			err:             NewExtractError("tar.gz", base),
+			wantCode:        ErrCodeExtractFailed,
+			wantMsgContains: "failed to extract tar.gz",
+			wantParent:      true,
+		},
+		{
+			name:            "package missing",
+			err:             NewPackageNotFoundError("tool"),
+			wantCode:        ErrCodePackageNotFound,
+			wantMsgContains: "package tool not found",
+			wantSuggest:     "Use 'deca add <owner/repo>' to add a new package",
+		},
+		{
+			name:            "sudo required",
+			err:             NewSudoRequiredError("install"),
+			wantCode:        ErrCodeSudoRequired,
+			wantMsgContains: "install requires sudo privileges",
+			wantSuggest:     "Make sure sudo is configured or run with appropriate permissions",
+		},
+		{
+			name:            "sudo failed",
+			err:             NewSudoFailedError(base),
+			wantCode:        ErrCodeSudoFailed,
+			wantMsgContains: "sudo operation failed",
+			wantSuggest:     "Check your sudo configuration and try again",
+			wantParent:      true,
+		},
+		{
+			name:            "permission denied",
+			err:             NewPermissionDeniedError("write file"),
+			wantCode:        ErrCodePermissionDenied,
+			wantMsgContains: "permission denied: write file",
+		},
+		{
+			name:            "rate limited",
+			err:             NewRateLimitedError(),
+			wantCode:        ErrCodeRateLimited,
+			wantMsgContains: "GitHub API rate limit exceeded",
+			wantSuggest:     "Set GITHUB_TOKEN environment variable to increase rate limit",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if tt.err.Code != tt.wantCode {
+				t.Fatalf("expected code %s, got %s", tt.wantCode, tt.err.Code)
+			}
+			if !strings.Contains(tt.err.Message, tt.wantMsgContains) {
+				t.Fatalf("expected message %q to contain %q", tt.err.Message, tt.wantMsgContains)
+			}
+			if tt.wantSuggest != "" && tt.err.Suggest != tt.wantSuggest {
+				t.Fatalf("expected suggest %q, got %q", tt.wantSuggest, tt.err.Suggest)
+			}
+			if tt.wantParent && !errors.Is(tt.err, base) {
+				t.Fatalf("expected wrapped parent error")
 			}
 		})
 	}
