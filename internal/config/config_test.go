@@ -157,3 +157,43 @@ func TestPackageRef(t *testing.T) {
 		t.Errorf("expected empty string, got '%s'", ref)
 	}
 }
+
+func TestDefaultDirsFallbackEnv(t *testing.T) {
+	origHome := userHomeDirFunc
+	origEnv := getenvFunc
+	userHomeDirFunc = func() (string, error) { return "", nil }
+	getenvFunc = func(key string) string {
+		switch key {
+		case "HOME":
+			return "/h"
+		case "USERPROFILE":
+			return "C:/u"
+		case "LOCALAPPDATA":
+			return "C:/local"
+		default:
+			return ""
+		}
+	}
+	defer func() {
+		userHomeDirFunc = origHome
+		getenvFunc = origEnv
+	}()
+
+	if got := DefaultConfigDir(); got == "" {
+		t.Fatal("expected non-empty config dir")
+	}
+	if got := DefaultStateDir(); got == "" {
+		t.Fatal("expected non-empty state dir")
+	}
+}
+
+func TestLoadConfigReadFailure(t *testing.T) {
+	orig := configReadFile
+	configReadFile = func(string) ([]byte, error) { return nil, os.ErrPermission }
+	defer func() { configReadFile = orig }()
+
+	_, err := Load("/bad")
+	if !os.IsPermission(err) {
+		t.Fatalf("expected permission error, got %v", err)
+	}
+}
