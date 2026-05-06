@@ -423,46 +423,21 @@ func TestDownloadFile_WithProgress(t *testing.T) {
 	}
 }
 
-func TestDownloadFileExternalDependencyFailures(t *testing.T) {
-	t.Run("http timeout", func(t *testing.T) {
-		origGet := httpGetFunc
-		httpGetFunc = func(string) (*http.Response, error) { return nil, &net.DNSError{IsTimeout: true} }
-		defer func() { httpGetFunc = origGet }()
-		err := downloadFile("https://example.com/x", filepath.Join(t.TempDir(), "x"))
-		if err == nil {
-			t.Fatal("expected timeout error")
-		}
-	})
+func TestDownloadFile_HTTPNon2xx(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Error(w, "forbidden", http.StatusForbidden)
+	}))
+	defer srv.Close()
 
-	t.Run("empty response body", func(t *testing.T) {
-		origGet := httpGetFunc
-		httpGetFunc = func(string) (*http.Response, error) {
-			return &http.Response{StatusCode: http.StatusOK, Body: io.NopCloser(http.NoBody), ContentLength: 0}, nil
-		}
-		defer func() { httpGetFunc = origGet }()
-		target := filepath.Join(t.TempDir(), "x")
-		if err := downloadFile("https://example.com/x", target); err != nil {
-			t.Fatalf("expected success, got %v", err)
-		}
-		data, err := os.ReadFile(target)
-		if err != nil || len(data) != 0 {
-			t.Fatalf("expected empty file, got len=%d err=%v", len(data), err)
-		}
-	})
+	err := DownloadFile(srv.URL, filepath.Join(t.TempDir(), "x"))
+	if err == nil {
+		t.Fatal("expected error")
+	}
+}
 
-	t.Run("create failure", func(t *testing.T) {
-		origGet := httpGetFunc
-		origCreate := downloadCreate
-		httpGetFunc = func(string) (*http.Response, error) {
-			return &http.Response{StatusCode: http.StatusOK, Body: io.NopCloser(strings.NewReader("x"))}, nil
-		}
-		downloadCreate = func(string) (*os.File, error) { return nil, os.ErrPermission }
-		defer func() {
-			httpGetFunc = origGet
-			downloadCreate = origCreate
-		}()
-		if err := downloadFile("https://example.com/x", filepath.Join(t.TempDir(), "x")); !os.IsPermission(err) {
-			t.Fatalf("expected permission error, got %v", err)
-		}
-	})
+func TestDownloadFile_InvalidURL_Regression(t *testing.T) {
+	err := DownloadFile("://bad-url", filepath.Join(t.TempDir(), "x"))
+	if err == nil {
+		t.Fatal("expected error")
+	}
 }

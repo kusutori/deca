@@ -1,8 +1,10 @@
 package cache
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -294,5 +296,37 @@ func TestCacheNewCacheDefault(t *testing.T) {
 
 	if c.RootDir != expected {
 		t.Errorf("expected %s, got %s", expected, c.RootDir)
+	}
+}
+
+func TestCachePut_SourceMissing_UsesWrappedError(t *testing.T) {
+	c := &Cache{RootDir: t.TempDir()}
+
+	_, err := c.Put("owner/repo", "v1.0.0", "asset.tar.gz", filepath.Join(t.TempDir(), "missing"))
+	if err == nil {
+		t.Fatal("expected error")
+	}
+	if !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("expected os.ErrNotExist wrapped, got %v", err)
+	}
+}
+
+func TestCacheRemove_NotFound(t *testing.T) {
+	c := &Cache{RootDir: t.TempDir()}
+	err := c.Remove("owner/repo", "v1.0.0", "missing.tar.gz")
+	if err == nil {
+		t.Fatal("expected error")
+	}
+	if !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("expected os.ErrNotExist wrapped, got %v", err)
+	}
+}
+
+func TestCacheGetPath_BoundaryInputs(t *testing.T) {
+	c := &Cache{RootDir: t.TempDir()}
+	long := strings.Repeat("a", 256)
+	p := c.GetPath("", "", "../../"+long+".tar.gz")
+	if filepath.Base(p) != long+".tar.gz" {
+		t.Fatalf("expected sanitized basename, got %s", p)
 	}
 }

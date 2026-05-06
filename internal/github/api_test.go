@@ -2,6 +2,7 @@ package github
 
 import (
 	"context"
+	"errors"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -11,6 +12,7 @@ import (
 	"testing"
 
 	"github.com/kusutori/deca/internal/config"
+	gh "github.com/google/go-github/v60/github"
 )
 
 func TestGetLatestReleaseWithOptions_IncludePrerelease(t *testing.T) {
@@ -270,5 +272,28 @@ func TestTransformDownloadURL_UsesMirrorConfig(t *testing.T) {
 	want := "https://mirror.example.com/owner/repo/releases/download/v1.0.0/asset.tar.gz"
 	if got != want {
 		t.Fatalf("expected mirror url %s, got %s", want, got)
+	}
+}
+
+func TestGetLatestRelease_RateLimitError(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("X-RateLimit-Remaining", "0")
+		w.Header().Set("X-RateLimit-Reset", "9999999999")
+		w.WriteHeader(http.StatusForbidden)
+		_, _ = w.Write([]byte(`{"message":"API rate limit exceeded"}`))
+	}))
+	defer server.Close()
+
+	client := NewClient()
+	client.client.BaseURL = mustParseURL(t, server.URL+"/")
+
+	_, err := client.GetLatestRelease(context.Background(), "owner", "repo")
+	if err == nil {
+		t.Fatal("expected error")
+	}
+
+	var rl *gh.RateLimitError
+	if !errors.As(err, &rl) {
+		t.Fatalf("expected wrapped RateLimitError, got %T %v", err, err)
 	}
 }

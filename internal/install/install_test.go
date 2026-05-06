@@ -365,3 +365,58 @@ func TestInstallSystemPackage_UsesDownloadFile(t *testing.T) {
 		t.Fatalf("expected download error, got %v", err)
 	}
 }
+
+func TestRegression_Install_PermissionDeniedOnExistingTarget(t *testing.T) {
+	tmpDir := t.TempDir()
+	binDir := filepath.Join(tmpDir, "bin")
+	if err := os.MkdirAll(binDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	installer := NewInstaller(binDir)
+
+	orig := downloadFileFunc
+	t.Cleanup(func() { downloadFileFunc = orig })
+	downloadFileFunc = func(url, path string) error {
+		return os.WriteFile(path, []byte("appimage"), 0755)
+	}
+
+	targetPath := filepath.Join(binDir, "tool")
+	if err := os.WriteFile(targetPath, []byte("old"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(binDir, 0555); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(binDir, 0755) })
+
+	release := &github.ReleaseInfo{TagName: "v1.0.0", Owner: "o", Repo: "r"}
+	asset := &github.AssetInfo{Name: "tool.AppImage", DownloadURL: "http://example.com/tool.AppImage"}
+
+	_, err := installer.Install("tool", release, asset)
+	if err == nil {
+		t.Skip("permission semantics vary when tests run as privileged user")
+	}
+	if !errors.Is(err, os.ErrPermission) {
+		t.Fatalf("expected permission error, got %v", err)
+	}
+}
+
+func TestInstallAppImage_DownloadFailureUsesErrorsIs(t *testing.T) {
+	tmpDir := t.TempDir()
+	installer := NewInstaller(tmpDir)
+
+	orig := downloadFileFunc
+	t.Cleanup(func() { downloadFileFunc = orig })
+	downloadFileFunc = func(url, path string) error { return os.ErrPermission }
+
+	release := &github.ReleaseInfo{TagName: "v1.0.0", Owner: "o", Repo: "r"}
+	asset := &github.AssetInfo{Name: "tool.AppImage", DownloadURL: "http://example.com/tool.AppImage"}
+
+	_, err := installer.Install("tool", release, asset)
+	if err == nil {
+		t.Fatal("expected error")
+	}
+	if !errors.Is(err, os.ErrPermission) {
+		t.Fatalf("expected wrapped permission error, got %v", err)
+	}
+}
