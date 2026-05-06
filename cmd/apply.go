@@ -26,6 +26,7 @@ var ApplyCmd = &cobra.Command{
 This command reads the configuration file and ensures all packages
 are installed with the specified versions.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
+		prereleaseFlag, _ := cmd.Flags().GetBool("prerelease")
 		cfg, err := loadConfig()
 		if err != nil {
 			return decaerrors.NewConfigNotFoundError(getConfigPath())
@@ -63,7 +64,7 @@ are installed with the specified versions.`,
 		for name, pkg := range cfg.Packages {
 			name, pkg := name, pkg
 			g.Go(func() error {
-				result, err := installPackage(ctx, ghClient, installer, name, &pkg, state, runtimeOS, runtimeArch)
+				result, err := installPackage(ctx, ghClient, installer, name, &pkg, state, runtimeOS, runtimeArch, prereleaseFlag)
 				m.Lock()
 				if err != nil {
 					errs = append(errs, err)
@@ -110,10 +111,11 @@ are installed with the specified versions.`,
 }
 
 func init() {
+	ApplyCmd.Flags().Bool("prerelease", false, "Include pre-release versions when selecting latest package versions")
 	RootCmd.AddCommand(ApplyCmd)
 }
 
-func installPackage(ctx context.Context, ghClient *github.Client, installer *install.Installer, name string, pkg *config.Package, state *config.State, runtimeOS, runtimeArch string) (string, error) {
+func installPackage(ctx context.Context, ghClient *github.Client, installer *install.Installer, name string, pkg *config.Package, state *config.State, runtimeOS, runtimeArch string, forcePrerelease bool) (string, error) {
 	ok, targetOS, targetArch, err := config.PackageMatches(pkg, runtimeOS, runtimeArch)
 	if err != nil {
 		return "", decaerrors.NewDecaError(decaerrors.ErrCodeConfigInvalid, "invalid os/arch condition").WithParent(err)
@@ -132,7 +134,7 @@ func installPackage(ctx context.Context, ghClient *github.Client, installer *ins
 
 	// Get latest release
 	printStatus(fmt.Sprintf("Fetching %s...", name))
-	release, err := releaseForPackage(ctx, ghClient, owner, repo, pkg)
+	release, err := releaseForPackage(ctx, ghClient, owner, repo, pkg, forcePrerelease)
 	if err != nil {
 		return "", decaerrors.NewGitHubAPIError(
 			fmt.Errorf("%s: failed to fetch release: %w", name, err),

@@ -51,6 +51,7 @@ arch = "amd64"
 [packages]
 zellij = { repo = "zellij-org/zellij", asset = "zellij.*x86_64" }
 neovim = { repo = "neovim/neovim", version = "0.9.5", os = "linux", arch = "amd64" }
+wezterm = { repo = "wez/wezterm", prerelease = true }
 
 [settings]
 auto_update = true
@@ -119,6 +120,14 @@ bin_dir = "/usr/local/bin"
 	}
 	if neovim.Arch != "amd64" {
 		t.Errorf("expected neovim arch 'amd64', got '%s'", neovim.Arch)
+	}
+
+	wezterm, ok := cfg.Packages["wezterm"]
+	if !ok {
+		t.Fatal("wezterm package not found")
+	}
+	if !wezterm.Prerelease {
+		t.Error("expected wezterm prerelease to be true")
 	}
 }
 

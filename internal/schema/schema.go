@@ -109,6 +109,11 @@ func buildPackageSchema() *JSONSchema {
 				Description: "Keep versioned binaries on disk and create a symlink to the active version.",
 				Default:     false,
 			},
+			"prerelease": {
+				Type:        "boolean",
+				Description: "Allow pre-release versions when selecting the latest release (ignored when version is pinned).",
+				Default:     false,
+			},
 			"desktop": buildDesktopSchema(),
 		},
 		Required: []string{"repo"},

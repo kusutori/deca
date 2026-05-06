@@ -9,9 +9,9 @@ import (
 	"github.com/kusutori/deca/internal/github"
 )
 
-func releaseForPackage(ctx context.Context, ghClient *github.Client, owner, repo string, pkg *config.Package) (*github.ReleaseInfo, error) {
+func releaseForPackage(ctx context.Context, ghClient *github.Client, owner, repo string, pkg *config.Package, forcePrerelease bool) (*github.ReleaseInfo, error) {
 	if pkg.Version == "" {
-		return ghClient.GetLatestRelease(ctx, owner, repo)
+		return ghClient.GetLatestReleaseWithOptions(ctx, owner, repo, pkg.Prerelease || forcePrerelease)
 	}
 
 	var lastErr error
