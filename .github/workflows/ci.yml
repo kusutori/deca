@@ -10,6 +10,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Setup Go
         uses: actions/setup-go@v5
@@ -19,6 +21,23 @@ jobs:
       - name: Test with coverage
         run: |
           go test ./... -coverprofile=coverage.out
-          total=$(go tool cover -func=coverage.out | awk '/^total:/ {print $3}' | tr -d '%')
-          echo "Total coverage: ${total}%"
-          awk -v total="${total}" 'BEGIN { if (total+0 < 80) { printf("Coverage %.2f%% is below 80%%\n", total); exit 1 } }'
+          go tool cover -func=coverage.out
+
+      - name: Calculate base coverage (pull_request only)
+        if: github.event_name == 'pull_request'
+        run: |
+          git fetch origin "${{ github.base_ref }}"
+          git worktree add ../deca-base "origin/${{ github.base_ref }}"
+          pushd ../deca-base >/dev/null
+          go test ./... -coverprofile=coverage-base.out
+          base_total=$(go tool cover -func=coverage-base.out | awk '/^total:/ {print $3}' | tr -d '%')
+          echo "BASELINE_COVERAGE=${base_total}" >> "$GITHUB_ENV"
+          echo "Base branch (${{ github.base_ref }}) coverage: ${base_total}%"
+          popd >/dev/null
+          git worktree remove ../deca-base --force
+
+      - name: Coverage gate
+        run: scripts/coverage_gate.sh coverage.out
+        env:
+          COVERAGE_STAGE: final
+          BASELINE_COVERAGE: ${{ env.BASELINE_COVERAGE }}
