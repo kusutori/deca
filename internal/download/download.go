@@ -22,6 +22,13 @@ import (
 var isTerminal = isatty.IsTerminal
 var progressWriter io.Writer = os.Stderr
 
+var (
+	httpGetFunc    = http.Get
+	downloadCreate = os.Create
+	downloadRemove = os.Remove
+	downloadRename = os.Rename
+)
+
 // copyFile copies a file from src to dst
 func copyFile(src, dst string) error {
 	srcFile, err := os.Open(src)
@@ -148,7 +155,7 @@ func DownloadFile(url, path string) error {
 
 // downloadFile downloads a file from a URL
 func downloadFile(url, path string) error {
-	resp, err := http.Get(url)
+	resp, err := httpGetFunc(url)
 	if err != nil {
 		return err
 	}
@@ -158,7 +165,7 @@ func downloadFile(url, path string) error {
 		return fmt.Errorf("HTTP %d", resp.StatusCode)
 	}
 
-	out, err := os.Create(path)
+	out, err := downloadCreate(path)
 	if err != nil {
 		return err
 	}
@@ -195,7 +202,7 @@ func downloadFileWithCache(url, path, repo, version, assetName, digest string) e
 	// Create temp file for download
 	tmpPath := path + ".tmp"
 
-	resp, err := http.Get(url)
+	resp, err := httpGetFunc(url)
 	if err != nil {
 		return err
 	}
@@ -205,7 +212,7 @@ func downloadFileWithCache(url, path, repo, version, assetName, digest string) e
 		return fmt.Errorf("HTTP %d", resp.StatusCode)
 	}
 
-	out, err := os.Create(tmpPath)
+	out, err := downloadCreate(tmpPath)
 	if err != nil {
 		return err
 	}
@@ -231,13 +238,13 @@ func downloadFileWithCache(url, path, repo, version, assetName, digest string) e
 	}
 
 	if err != nil {
-		os.Remove(tmpPath)
+		downloadRemove(tmpPath)
 		return err
 	}
 
 	// Rename to final path
-	if err := os.Rename(tmpPath, path); err != nil {
-		os.Remove(tmpPath)
+	if err := downloadRename(tmpPath, path); err != nil {
+		downloadRemove(tmpPath)
 		return err
 	}
 

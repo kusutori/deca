@@ -9,6 +9,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/ulikunitz/xz"
@@ -420,4 +421,48 @@ func TestDownloadFile_WithProgress(t *testing.T) {
 	if string(data) != string(payload) {
 		t.Fatalf("downloaded data mismatch: got %q, want %q", string(data), string(payload))
 	}
+}
+
+func TestDownloadFileExternalDependencyFailures(t *testing.T) {
+	t.Run("http timeout", func(t *testing.T) {
+		origGet := httpGetFunc
+		httpGetFunc = func(string) (*http.Response, error) { return nil, &net.DNSError{IsTimeout: true} }
+		defer func() { httpGetFunc = origGet }()
+		err := downloadFile("https://example.com/x", filepath.Join(t.TempDir(), "x"))
+		if err == nil {
+			t.Fatal("expected timeout error")
+		}
+	})
+
+	t.Run("empty response body", func(t *testing.T) {
+		origGet := httpGetFunc
+		httpGetFunc = func(string) (*http.Response, error) {
+			return &http.Response{StatusCode: http.StatusOK, Body: io.NopCloser(http.NoBody), ContentLength: 0}, nil
+		}
+		defer func() { httpGetFunc = origGet }()
+		target := filepath.Join(t.TempDir(), "x")
+		if err := downloadFile("https://example.com/x", target); err != nil {
+			t.Fatalf("expected success, got %v", err)
+		}
+		data, err := os.ReadFile(target)
+		if err != nil || len(data) != 0 {
+			t.Fatalf("expected empty file, got len=%d err=%v", len(data), err)
+		}
+	})
+
+	t.Run("create failure", func(t *testing.T) {
+		origGet := httpGetFunc
+		origCreate := downloadCreate
+		httpGetFunc = func(string) (*http.Response, error) {
+			return &http.Response{StatusCode: http.StatusOK, Body: io.NopCloser(strings.NewReader("x"))}, nil
+		}
+		downloadCreate = func(string) (*os.File, error) { return nil, os.ErrPermission }
+		defer func() {
+			httpGetFunc = origGet
+			downloadCreate = origCreate
+		}()
+		if err := downloadFile("https://example.com/x", filepath.Join(t.TempDir(), "x")); !os.IsPermission(err) {
+			t.Fatalf("expected permission error, got %v", err)
+		}
+	})
 }

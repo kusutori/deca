@@ -7,14 +7,20 @@ import (
 	"time"
 )
 
+var (
+	stateReadFile  = os.ReadFile
+	stateMkdirAll  = os.MkdirAll
+	stateWriteFile = os.WriteFile
+)
+
 // InstallType represents how a package was installed
 type InstallType string
 
 const (
-	InstallTypeBinary    InstallType = "binary"     // Extracted from tar.gz/zip
-	InstallTypeAppImage  InstallType = "appimage"   // AppImage executable
-	InstallTypeSystem    InstallType = "system"     // System package (.deb/.rpm)
-	InstallTypeSingle    InstallType = "single"     // Single binary file
+	InstallTypeBinary   InstallType = "binary"   // Extracted from tar.gz/zip
+	InstallTypeAppImage InstallType = "appimage" // AppImage executable
+	InstallTypeSystem   InstallType = "system"   // System package (.deb/.rpm)
+	InstallTypeSingle   InstallType = "single"   // Single binary file
 )
 
 // InstalledPackage represents the state of an installed package
@@ -24,7 +30,7 @@ type InstalledPackage struct {
 	AssetName           string      `json:"asset_name,omitempty"`
 	InstallType         InstallType `json:"install_type"`
 	InstalledAt         time.Time   `json:"installed_at"`
-	SystemPkgName       string      `json:"system_pkg_name,omitempty"`        // Actual package name for system packages
+	SystemPkgName       string      `json:"system_pkg_name,omitempty"`       // Actual package name for system packages
 	VersionedBinaryPath string      `json:"versioned_binary_path,omitempty"` // Path to versioned binary (e.g. eza-v0.20.0)
 }
 
@@ -35,7 +41,7 @@ type State struct {
 
 // LoadState reads the state file
 func LoadState(path string) (*State, error) {
-	data, err := os.ReadFile(path)
+	data, err := stateReadFile(path)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return &State{Packages: make(map[string]InstalledPackage)}, nil
@@ -64,11 +70,11 @@ func (s *State) SaveState(path string) error {
 
 	// Ensure directory exists
 	dir := filepath.Dir(path)
-	if err := os.MkdirAll(dir, 0755); err != nil {
+	if err := stateMkdirAll(dir, 0755); err != nil {
 		return err
 	}
 
-	return os.WriteFile(path, data, 0644)
+	return stateWriteFile(path, data, 0644)
 }
 
 // DefaultStatePath returns the default state file path

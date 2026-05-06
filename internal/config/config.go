@@ -8,38 +8,44 @@ import (
 	"github.com/pelletier/go-toml/v2"
 )
 
+var (
+	userHomeDirFunc = os.UserHomeDir
+	getenvFunc      = os.Getenv
+	configReadFile  = os.ReadFile
+)
+
 // DefaultConfigDir returns the default configuration directory
 func DefaultConfigDir() string {
-	home, _ := os.UserHomeDir()
+	home, _ := userHomeDirFunc()
 	if home == "" {
-		home = os.Getenv("HOME")
+		home = getenvFunc("HOME")
 	}
 	if home == "" {
-		home = os.Getenv("USERPROFILE")
+		home = getenvFunc("USERPROFILE")
 	}
 	return filepath.Join(home, ".config", "deca")
 }
 
 // DefaultStateDir returns the default state directory
 func DefaultStateDir() string {
-	home, _ := os.UserHomeDir()
+	home, _ := userHomeDirFunc()
 	if home == "" {
-		home = os.Getenv("HOME")
+		home = getenvFunc("HOME")
 	}
 	if home == "" {
-		home = os.Getenv("USERPROFILE")
+		home = getenvFunc("USERPROFILE")
 	}
 	return filepath.Join(home, ".local", "state", "deca")
 }
 
 // DefaultDesktopDir returns the default desktop entry directory
 func DefaultDesktopDir() string {
-	home, _ := os.UserHomeDir()
+	home, _ := userHomeDirFunc()
 	if home == "" {
-		home = os.Getenv("HOME")
+		home = getenvFunc("HOME")
 	}
 	if home == "" {
-		home = os.Getenv("USERPROFILE")
+		home = getenvFunc("USERPROFILE")
 	}
 	return filepath.Join(home, ".local", "share", "applications")
 }
@@ -51,16 +57,16 @@ func DesktopEntryPath(name string) string {
 
 // DefaultBinDir returns the default binary directory
 func DefaultBinDir() string {
-	home, _ := os.UserHomeDir()
+	home, _ := userHomeDirFunc()
 	if home == "" {
-		home = os.Getenv("HOME")
+		home = getenvFunc("HOME")
 	}
 	if home == "" {
-		home = os.Getenv("USERPROFILE")
+		home = getenvFunc("USERPROFILE")
 	}
 	switch runtime.GOOS {
 	case "windows":
-		return filepath.Join(os.Getenv("LOCALAPPDATA"), "deca", "bin")
+		return filepath.Join(getenvFunc("LOCALAPPDATA"), "deca", "bin")
 	default:
 		return filepath.Join(home, ".local", "bin")
 	}
@@ -87,12 +93,12 @@ type SystemInfo struct {
 
 // DesktopConfig represents .desktop file configuration
 type DesktopConfig struct {
-	Name       string `toml:"name"`        // Application name (defaults to package name)
-	Comment    string `toml:"comment"`     // Short description
-	Icon       string `toml:"icon"`        // Icon name or path
-	Terminal   bool   `toml:"terminal"`    // Whether to run in terminal
-	Categories string `toml:"categories"`  // Categories (default: Utilities)
-	MimeTypes  string `toml:"mime_types"`  // MIME types
+	Name       string `toml:"name"`       // Application name (defaults to package name)
+	Comment    string `toml:"comment"`    // Short description
+	Icon       string `toml:"icon"`       // Icon name or path
+	Terminal   bool   `toml:"terminal"`   // Whether to run in terminal
+	Categories string `toml:"categories"` // Categories (default: Utilities)
+	MimeTypes  string `toml:"mime_types"` // MIME types
 }
 
 // Package represents a single package configuration
@@ -115,7 +121,7 @@ type Settings struct {
 
 // Load reads and parses the configuration file
 func Load(path string) (*Config, error) {
-	data, err := os.ReadFile(path)
+	data, err := configReadFile(path)
 	if err != nil {
 		return nil, err
 	}
