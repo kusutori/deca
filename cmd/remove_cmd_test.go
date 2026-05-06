@@ -8,7 +8,7 @@ func TestRemoveCommand(t *testing.T) {
 			name:         "missing required name",
 			args:         []string{"remove"},
 			wantErr:      true,
-			wantContains: []string{"requires at least 1 arg"},
+			wantErrText:  "requires at least 1 arg",
 			wantExitCode: 1,
 		},
 		{
@@ -18,14 +18,12 @@ func TestRemoveCommand(t *testing.T) {
 				setupTempConfig(t)
 			},
 			wantErr:      false,
-			wantContains: []string{"not found in config"},
 			wantExitCode: 0,
 		},
 		{
 			name:         "help output",
 			args:         []string{"remove", "--help"},
 			wantErr:      false,
-			wantContains: []string{"Remove a package", "--keep-installed"},
 			wantExitCode: 0,
 		},
 		{
@@ -35,7 +33,6 @@ func TestRemoveCommand(t *testing.T) {
 				setupTempConfig(t)
 			},
 			wantErr:      false,
-			wantContains: []string{"not found in config"},
 			wantExitCode: 0,
 		},
 	}

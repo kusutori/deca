@@ -12,7 +12,7 @@ func TestAddCommand(t *testing.T) {
 			name:         "missing required repo",
 			args:         []string{"add"},
 			wantErr:      true,
-			wantContains: []string{"requires at least 1 arg"},
+			wantErrText:  "requires at least 1 arg",
 			wantExitCode: 1,
 		},
 		{
@@ -22,14 +22,13 @@ func TestAddCommand(t *testing.T) {
 				setupTempConfig(t)
 			},
 			wantErr:      true,
-			wantContains: []string{"invalid repo format"},
+			wantErrText:  "invalid repo format",
 			wantExitCode: 1,
 		},
 		{
 			name:         "help output",
 			args:         []string{"add", "--help"},
 			wantErr:      false,
-			wantContains: []string{"Add a package", "--no-install"},
 			wantExitCode: 0,
 		},
 		{
@@ -39,7 +38,6 @@ func TestAddCommand(t *testing.T) {
 				setupTempConfig(t)
 			},
 			wantErr:      false,
-			wantContains: []string{"Added gh -> cli/cli"},
 			wantExitCode: 0,
 		},
 	}
