@@ -421,3 +421,22 @@ func TestDownloadFile_WithProgress(t *testing.T) {
 		t.Fatalf("downloaded data mismatch: got %q, want %q", string(data), string(payload))
 	}
 }
+
+func TestDownloadFile_HTTPNon2xx(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Error(w, "forbidden", http.StatusForbidden)
+	}))
+	defer srv.Close()
+
+	err := DownloadFile(srv.URL, filepath.Join(t.TempDir(), "x"))
+	if err == nil {
+		t.Fatal("expected error")
+	}
+}
+
+func TestDownloadFile_InvalidURL_Regression(t *testing.T) {
+	err := DownloadFile("://bad-url", filepath.Join(t.TempDir(), "x"))
+	if err == nil {
+		t.Fatal("expected error")
+	}
+}

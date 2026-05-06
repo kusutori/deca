@@ -157,3 +157,16 @@ func TestPackageRef(t *testing.T) {
 		t.Errorf("expected empty string, got '%s'", ref)
 	}
 }
+
+func TestLoadInvalidTOML(t *testing.T) {
+	tmpDir := t.TempDir()
+	configPath := filepath.Join(tmpDir, "broken.toml")
+	if err := os.WriteFile(configPath, []byte("[packages\ninvalid"), 0644); err != nil {
+		t.Fatalf("failed to write config: %v", err)
+	}
+
+	_, err := Load(configPath)
+	if err == nil {
+		t.Fatal("expected parse error")
+	}
+}
