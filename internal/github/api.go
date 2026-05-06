@@ -78,6 +78,35 @@ func (c *Client) GetLatestRelease(ctx context.Context, owner, repo string) (*Rel
 	return toReleaseInfo(release, owner, repo), nil
 }
 
+// GetLatestReleaseWithOptions returns the latest release with optional pre-release support.
+func (c *Client) GetLatestReleaseWithOptions(ctx context.Context, owner, repo string, includePrerelease bool) (*ReleaseInfo, error) {
+	if !includePrerelease {
+		return c.GetLatestRelease(ctx, owner, repo)
+	}
+
+	opts := &github.ListOptions{PerPage: 30}
+	for {
+		releases, resp, err := c.client.Repositories.ListReleases(ctx, owner, repo, opts)
+		if err != nil {
+			return nil, fmt.Errorf("failed to list releases: %w", err)
+		}
+
+		for _, r := range releases {
+			if r.GetDraft() {
+				continue
+			}
+			return toReleaseInfo(r, owner, repo), nil
+		}
+
+		if resp == nil || resp.NextPage == 0 {
+			break
+		}
+		opts.Page = resp.NextPage
+	}
+
+	return nil, fmt.Errorf("no releases found")
+}
+
 // GetReleaseByTag returns a specific release by tag
 func (c *Client) GetReleaseByTag(ctx context.Context, owner, repo, tag string) (*ReleaseInfo, error) {
 	release, _, err := c.client.Repositories.GetReleaseByTag(ctx, owner, repo, tag)
@@ -426,7 +455,7 @@ func (c *Client) FetchMultipleReleases(ctx context.Context, repos []struct{ Owne
 	for i, r := range repos {
 		i, r := i, r // Capture range variables
 		g.Go(func() error {
-			release, err := c.GetLatestRelease(ctx, r.Owner, r.Repo)
+			release, err := c.GetLatestReleaseWithOptions(ctx, r.Owner, r.Repo, false)
 			if err != nil {
 				mu.Lock()
 				errors = append(errors, fmt.Errorf("%s/%s: %w", r.Owner, r.Repo, err))

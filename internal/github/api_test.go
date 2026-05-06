@@ -1,12 +1,62 @@
 package github
 
 import (
+	"context"
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
+	"net/url"
 	"os"
 	"path/filepath"
 	"testing"
 
 	"github.com/kusutori/deca/internal/config"
 )
+
+func TestGetLatestReleaseWithOptions_IncludePrerelease(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/repos/owner/repo/releases" {
+			t.Fatalf("unexpected path: %s", r.URL.Path)
+		}
+		_ = json.NewEncoder(w).Encode([]map[string]any{
+			{
+				"tag_name":   "v2.0.0-rc1",
+				"prerelease": true,
+				"draft":      false,
+				"assets":     []map[string]any{},
+				"html_url":   "https://example.com/release/prerelease",
+			},
+			{
+				"tag_name":   "v1.9.0",
+				"prerelease": false,
+				"draft":      false,
+				"assets":     []map[string]any{},
+				"html_url":   "https://example.com/release/stable",
+			},
+		})
+	}))
+	defer server.Close()
+
+	client := NewClient()
+	client.client.BaseURL = mustParseURL(t, server.URL+"/")
+
+	release, err := client.GetLatestReleaseWithOptions(context.Background(), "owner", "repo", true)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if release.TagName != "v2.0.0-rc1" {
+		t.Fatalf("expected prerelease tag, got %s", release.TagName)
+	}
+}
+
+func mustParseURL(t *testing.T, raw string) *url.URL {
+	t.Helper()
+	parsed, err := url.Parse(raw)
+	if err != nil {
+		t.Fatalf("failed to parse url %q: %v", raw, err)
+	}
+	return parsed
+}
 
 func TestParseRepo(t *testing.T) {
 	tests := []struct {

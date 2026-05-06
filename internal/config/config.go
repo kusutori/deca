@@ -97,13 +97,14 @@ type DesktopConfig struct {
 
 // Package represents a single package configuration
 type Package struct {
-	Repo      string         `toml:"repo"`
-	Asset     string         `toml:"asset"`
-	Version   string         `toml:"version"`
-	OS        string         `toml:"os"`
-	Arch      string         `toml:"arch"`
-	Desktop   *DesktopConfig `toml:"desktop"`
-	Versioned bool           `toml:"versioned"` // Keep versioned binaries with symlink
+	Repo       string         `toml:"repo"`
+	Asset      string         `toml:"asset"`
+	Version    string         `toml:"version"`
+	OS         string         `toml:"os"`
+	Arch       string         `toml:"arch"`
+	Desktop    *DesktopConfig `toml:"desktop"`
+	Versioned  bool           `toml:"versioned"`  // Keep versioned binaries with symlink
+	Prerelease bool           `toml:"prerelease"` // Allow selecting pre-release versions when version is not pinned
 }
 
 // Settings represents optional settings
@@ -191,6 +192,7 @@ func Load(path string) (*Config, error) {
 				}
 				// Parse versioned flag
 				pkg.Versioned = getBool(v, "versioned")
+				pkg.Prerelease = getBool(v, "prerelease")
 			}
 			cfg.Packages[name] = pkg
 		}

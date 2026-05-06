@@ -22,6 +22,7 @@ var UpdateCmd = &cobra.Command{
 With no arguments, updates all installed packages.
 With a name, updates only that specific package.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
+		prereleaseFlag, _ := cmd.Flags().GetBool("prerelease")
 		// Load config
 		cfg, err := loadConfig()
 		if err != nil {
@@ -79,7 +80,7 @@ With a name, updates only that specific package.`,
 			}
 
 			// Get desired release (latest or pinned)
-			release, err := releaseForPackage(ctx, ghClient, owner, repo, &pkg)
+			release, err := releaseForPackage(ctx, ghClient, owner, repo, &pkg, prereleaseFlag)
 			if err != nil {
 				return fmt.Errorf("%s: failed to fetch release: %w", name, err)
 			}
@@ -168,5 +169,6 @@ With a name, updates only that specific package.`,
 }
 
 func init() {
+	UpdateCmd.Flags().Bool("prerelease", false, "Include pre-release versions when checking/updating packages")
 	RootCmd.AddCommand(UpdateCmd)
 }

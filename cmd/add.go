@@ -36,6 +36,7 @@ Use --asset to specify which asset to download.`,
 		osFlag, _ := cmd.Flags().GetString("os")
 		arch, _ := cmd.Flags().GetString("arch")
 		noInstall, _ := cmd.Flags().GetBool("no-install")
+		prereleaseFlag, _ := cmd.Flags().GetBool("prerelease")
 
 		// Load config
 		cfg, err := loadConfig()
@@ -63,7 +64,7 @@ Use --asset to specify which asset to download.`,
 
 			pkgAsset := asset
 			if interactive {
-				selectedAsset, err := interactiveSelectAsset(owner, repoName)
+				selectedAsset, err := interactiveSelectAsset(owner, repoName, prereleaseFlag)
 				if err != nil {
 					return fmt.Errorf("interactive selection failed for %s: %w", repo, err)
 				}
@@ -73,10 +74,11 @@ Use --asset to specify which asset to download.`,
 			}
 
 			cfg.Packages[pkgName] = config.Package{
-				Repo:  repo,
-				Asset: pkgAsset,
-				OS:    osFlag,
-				Arch:  arch,
+				Repo:       repo,
+				Asset:      pkgAsset,
+				OS:         osFlag,
+				Arch:       arch,
+				Prerelease: prereleaseFlag,
 			}
 
 			configPath := getConfigPath()
@@ -91,7 +93,7 @@ Use --asset to specify which asset to download.`,
 
 			if !noInstall {
 				pkg := cfg.Packages[pkgName]
-				if err := doInstall(cmd.Context(), ghClient, installer, pkgName, &pkg); err != nil {
+				if err := doInstall(cmd.Context(), ghClient, installer, pkgName, &pkg, prereleaseFlag); err != nil {
 					return err
 				}
 			}
@@ -108,16 +110,17 @@ func init() {
 	AddCmd.Flags().String("os", runtime.GOOS, "Target OS")
 	AddCmd.Flags().String("arch", runtime.GOARCH, "Target architecture")
 	AddCmd.Flags().Bool("no-install", false, "Don't install immediately")
+	AddCmd.Flags().Bool("prerelease", false, "Include pre-release versions when selecting the latest release")
 	RootCmd.AddCommand(AddCmd)
 }
 
 // interactiveSelectAsset shows all assets and lets user select one
-func interactiveSelectAsset(owner, repoName string) (*github.AssetInfo, error) {
+func interactiveSelectAsset(owner, repoName string, includePrerelease bool) (*github.AssetInfo, error) {
 	ghClient := github.NewClient()
 	ctx := getContext()
 
 	// Get latest release
-	release, err := ghClient.GetLatestRelease(ctx, owner, repoName)
+	release, err := ghClient.GetLatestReleaseWithOptions(ctx, owner, repoName, includePrerelease)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get release: %w", err)
 	}
@@ -142,7 +145,7 @@ func interactiveSelectAsset(owner, repoName string) (*github.AssetInfo, error) {
 	return selected, nil
 }
 
-func doInstall(ctx context.Context, ghClient *github.Client, installer *install.Installer, name string, pkg *config.Package) error {
+func doInstall(ctx context.Context, ghClient *github.Client, installer *install.Installer, name string, pkg *config.Package, forcePrerelease bool) error {
 	ok, targetOS, targetArch, err := config.PackageMatches(pkg, runtime.GOOS, runtime.GOARCH)
 	if err != nil {
 		return fmt.Errorf("%s: invalid condition: %w", name, err)
@@ -158,7 +161,7 @@ func doInstall(ctx context.Context, ghClient *github.Client, installer *install.
 	}
 
 	// Get latest release
-	release, err := ghClient.GetLatestRelease(ctx, owner, repo)
+	release, err := ghClient.GetLatestReleaseWithOptions(ctx, owner, repo, pkg.Prerelease || forcePrerelease)
 	if err != nil {
 		return fmt.Errorf("%s: failed to fetch release: %w", name, err)
 	}
