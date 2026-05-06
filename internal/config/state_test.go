@@ -268,3 +268,41 @@ func TestLoadStateWithSystemPkgName(t *testing.T) {
 		t.Errorf("expected SystemPkgName 'fresh-editor', got '%s'", pkg.SystemPkgName)
 	}
 }
+
+func TestLoadStateReadFailure(t *testing.T) {
+	orig := stateReadFile
+	stateReadFile = func(string) ([]byte, error) { return nil, os.ErrPermission }
+	defer func() { stateReadFile = orig }()
+
+	_, err := LoadState("/any")
+	if !os.IsPermission(err) {
+		t.Fatalf("expected permission error, got %v", err)
+	}
+}
+
+func TestSaveStateDependencyFailures(t *testing.T) {
+	state := &State{Packages: map[string]InstalledPackage{}}
+
+	t.Run("mkdir failure", func(t *testing.T) {
+		origMkdir := stateMkdirAll
+		stateMkdirAll = func(string, os.FileMode) error { return os.ErrPermission }
+		defer func() { stateMkdirAll = origMkdir }()
+		if err := state.SaveState("/tmp/state.json"); !os.IsPermission(err) {
+			t.Fatalf("expected permission error, got %v", err)
+		}
+	})
+
+	t.Run("write failure", func(t *testing.T) {
+		origMkdir := stateMkdirAll
+		origWrite := stateWriteFile
+		stateMkdirAll = func(string, os.FileMode) error { return nil }
+		stateWriteFile = func(string, []byte, os.FileMode) error { return os.ErrPermission }
+		defer func() {
+			stateMkdirAll = origMkdir
+			stateWriteFile = origWrite
+		}()
+		if err := state.SaveState("/tmp/state.json"); !os.IsPermission(err) {
+			t.Fatalf("expected permission error, got %v", err)
+		}
+	})
+}
