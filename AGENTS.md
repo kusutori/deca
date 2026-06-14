@@ -14,7 +14,7 @@ Use Pixi tasks for consistent builds:
 
 - `pixi run build`: compile `deca` with version info.
 - `pixi run debug`: build with debug symbols.
-- `pixi run test` or `go test ./...`: run all tests.
+- `pixi run test`: run all tests.
 - `pixi run static`: fully static Linux build (requires `musl-gcc`).
 - `pixi run release` / `pixi run musl-release`: cross-platform release binaries.
 - `pixi run info`: print build metadata.
@@ -31,7 +31,7 @@ This repo follows standard Go conventions:
 Tests use Go’s standard `testing` package. Run all tests with:
 
 ```bash
-go test ./...
+pixi run test
 ```
 
 Prefer table-driven tests and deterministic fixtures. Name test files and functions with the Go convention (`*_test.go`, `TestXxx`).
