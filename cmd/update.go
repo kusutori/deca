@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"os"
 	"strings"
-	"time"
 
 	"github.com/kusutori/deca/internal/config"
 	"github.com/kusutori/deca/internal/github"
@@ -120,7 +119,7 @@ With a name, updates only that specific package.`,
 				}
 			}
 
-			result, err := installer.Install(name, release, asset)
+			result, err := installer.Install(name, release, asset, pkg.InstallType)
 			if err != nil {
 				if backupPath != "" {
 					_ = install.RestoreFile(backupPath, targetPath)
@@ -132,14 +131,7 @@ With a name, updates only that specific package.`,
 			}
 
 			// Update state
-			state.SetPackage(name, config.InstalledPackage{
-				Repo:          pkg.Repo,
-				Version:       release.TagName,
-				AssetName:     result.AssetName,
-				InstallType:   result.InstallType,
-				InstalledAt:   time.Now(),
-				SystemPkgName: result.SystemPkgName,
-			})
+			state.SetPackage(name, installedPackageFromResult(name, &pkg, installer, release, result))
 
 			ui.Success.Printf("Updated %s to v%s\n", name, release.TagName)
 			if result.BinaryPath != "" {

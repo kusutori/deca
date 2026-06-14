@@ -4,6 +4,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -113,6 +114,10 @@ func TestCopyFile(t *testing.T) {
 }
 
 func TestCopyFilePermissions(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Windows does not expose POSIX execute bits through os.FileMode")
+	}
+
 	tmpDir := t.TempDir()
 	src := filepath.Join(tmpDir, "src")
 	dst := filepath.Join(tmpDir, "dst")
@@ -252,6 +257,74 @@ func TestInstallResultWithSystemPkgName(t *testing.T) {
 
 	if result.SystemPkgName != "fresh-editor" {
 		t.Errorf("expected SystemPkgName 'fresh-editor', got '%s'", result.SystemPkgName)
+	}
+}
+
+func TestDetectPackageTypeMSI(t *testing.T) {
+	if got := DetectPackageType("AppSetup.msi"); got != "msi" {
+		t.Fatalf("expected msi package type, got %q", got)
+	}
+}
+
+func TestResolveWindowsInstallMode(t *testing.T) {
+	tests := []struct {
+		name       string
+		asset      string
+		preference string
+		want       string
+		wantErr    bool
+	}{
+		{name: "auto msi", asset: "tool.msi", preference: "auto", want: "msi"},
+		{name: "auto exe", asset: "tool.exe", preference: "auto", want: "portable"},
+		{name: "explicit portable", asset: "tool.zip", preference: "portable", want: "portable"},
+		{name: "explicit installer", asset: "setup.exe", preference: "installer", want: "installer"},
+		{name: "installer requires exe", asset: "setup.zip", preference: "installer", wantErr: true},
+		{name: "msi requires msi", asset: "setup.exe", preference: "msi", wantErr: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := resolveWindowsInstallMode(tt.asset, tt.preference)
+			if tt.wantErr {
+				if err == nil {
+					t.Fatal("expected error")
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if got != tt.want {
+				t.Fatalf("expected %q, got %q", tt.want, got)
+			}
+		})
+	}
+}
+
+func TestExposeWindowsExecutable(t *testing.T) {
+	tmpDir := t.TempDir()
+	target := filepath.Join(tmpDir, "packages", "tool.exe")
+	exposed := filepath.Join(tmpDir, "bin", "tool.exe")
+	if err := os.MkdirAll(filepath.Dir(target), 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(target, []byte("portable exe"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	linkType, err := exposeWindowsExecutable(target, exposed)
+	if err != nil {
+		t.Fatalf("expose failed: %v", err)
+	}
+	if linkType != "hardlink" && linkType != "copy" {
+		t.Fatalf("unexpected link type: %s", linkType)
+	}
+	data, err := os.ReadFile(exposed)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(data) != "portable exe" {
+		t.Fatalf("unexpected exposed content: %q", string(data))
 	}
 }
 

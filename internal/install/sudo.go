@@ -112,6 +112,8 @@ func DetectPackageType(filename string) string {
 		return "deb"
 	case strings.HasSuffix(filename, ".rpm"):
 		return "rpm"
+	case strings.HasSuffix(filename, ".msi"):
+		return "msi"
 	case strings.HasSuffix(filename, ".apk"):
 		return "apk"
 	case strings.HasSuffix(filename, ".dmg"):

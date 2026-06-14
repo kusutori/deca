@@ -11,8 +11,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/kusutori/deca/internal/config"
 	"github.com/google/go-github/v60/github"
+	"github.com/kusutori/deca/internal/config"
 	"golang.org/x/sync/errgroup"
 )
 
@@ -219,6 +219,27 @@ func FindMatchingAsset(release *ReleaseInfo, pattern string, os, arch string) (*
 // selectBestAsset selects the best asset from multiple candidates
 // Priority: native binary > archive > deb > AppImage > rpm
 func selectBestAsset(candidates []*AssetInfo, os string) *AssetInfo {
+	if os == "windows" {
+		priority := []struct {
+			suffixes []string
+			priority int
+		}{
+			{[]string{".exe"}, 10},
+			{[]string{".zip", ".tar.gz", ".tgz", ".tar.xz", ".txz"}, 8},
+			{[]string{".msi"}, 6},
+		}
+		for _, p := range priority {
+			for _, asset := range candidates {
+				for _, suffix := range p.suffixes {
+					if strings.HasSuffix(strings.ToLower(asset.Name), suffix) {
+						return asset
+					}
+				}
+			}
+		}
+		return candidates[0]
+	}
+
 	// Priority order for package types
 	// Higher priority number = more preferred
 	priority := []struct {
@@ -260,7 +281,7 @@ func selectBestAsset(candidates []*AssetInfo, os string) *AssetInfo {
 
 // hasArchiveSuffix checks if filename has archive/package suffix
 func hasArchiveSuffix(name string) bool {
-	archiveSuffixes := []string{".tar.gz", ".tgz", ".tar.xz", ".txz", ".zip", ".appimage", ".deb", ".rpm", ".exe"}
+	archiveSuffixes := []string{".tar.gz", ".tgz", ".tar.xz", ".txz", ".zip", ".appimage", ".deb", ".rpm", ".msi", ".exe"}
 	for _, suffix := range archiveSuffixes {
 		if strings.HasSuffix(name, suffix) {
 			return true
@@ -310,8 +331,8 @@ func matchesOSArch(name string, os, arch string) bool {
 		case "darwin", "macos":
 			osMatches = strings.Contains(nameLower, "darwin") || strings.Contains(nameLower, "macos") || strings.Contains(nameLower, "apple")
 		case "windows":
-			// Windows files may contain "windows" or end with ".exe"
-			osMatches = strings.Contains(nameLower, "windows") || strings.HasSuffix(nameLower, ".exe")
+			// Windows files may contain "windows" or use native Windows package suffixes.
+			osMatches = strings.Contains(nameLower, "windows") || strings.HasSuffix(nameLower, ".exe") || strings.HasSuffix(nameLower, ".msi")
 		case "freebsd":
 			osMatches = strings.Contains(nameLower, "freebsd")
 		}
@@ -336,16 +357,16 @@ func matchesOSArch(name string, os, arch string) bool {
 		case "386", "i386":
 			archMatches = strings.Contains(nameLower, "386") || strings.Contains(nameLower, "i386")
 		}
-		// For Windows, if no arch is found in filename, still accept it
-		// Many Windows binaries don't include arch in the filename
+		// For Windows, if no arch is found in filename, still accept it.
+		// Many Windows binaries/installers don't include arch in the filename.
 		if !archMatches && (os == "windows" || !strings.HasSuffix(nameLower, ".exe")) {
 			// On Windows, .exe files without arch are acceptable
 			// On other platforms, require arch match
 			if os != "windows" && strings.HasSuffix(nameLower, ".exe") {
 				return false
 			}
-			if os == "windows" && strings.HasSuffix(nameLower, ".exe") {
-				archMatches = true // Accept .exe files without explicit arch
+			if os == "windows" && (strings.HasSuffix(nameLower, ".exe") || strings.HasSuffix(nameLower, ".msi")) {
+				archMatches = true // Accept Windows native files without explicit arch
 			}
 		}
 		if !archMatches {

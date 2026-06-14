@@ -104,6 +104,12 @@ func buildPackageSchema() *JSONSchema {
 				Description: "Override architecture for this package.",
 				Enum:        []string{"amd64", "arm64", "386", "arm"},
 			},
+			"install_type": {
+				Type:        "string",
+				Description: "Install strategy. On Windows, use 'portable' for direct executables, 'msi' for Windows Installer packages, or 'installer' for interactive GUI installers. Defaults to 'auto'.",
+				Enum:        []string{"auto", "portable", "msi", "installer"},
+				Default:     "auto",
+			},
 			"versioned": {
 				Type:        "boolean",
 				Description: "Keep versioned binaries on disk and create a symlink to the active version.",

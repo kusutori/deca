@@ -5,7 +5,7 @@
 ## 特性
 
 - 声明式配置 - TOML 格式，简单易用
-- 多种包格式 - 支持二进制、tar.gz、.deb/.rpm、AppImage
+- 多种包格式 - 支持二进制、tar.gz、.deb/.rpm、AppImage、Windows .exe/.msi
 - 交互式选择 - 可视化选择下载哪个 asset
 - 状态跟踪 - 自动记录安装版本和时间
 - 下载缓存 - 避免重复下载相同版本
@@ -80,6 +80,9 @@ bat = "sharkdp/bat"
 # 完整格式
 zellij = { repo = "zellij-org/zellij", asset = "*.deb" }
 neovim = { repo = "neovim/neovim", version = "0.10.0" }
+
+# Windows 交互式安装器
+sourcegit = { repo = "sourcegit-scm/sourcegit", asset = "*.exe", install_type = "installer" }
 
 [settings]
 auto_update = true
@@ -164,6 +167,11 @@ source ~/.config/nushell/completions/deca.nu
 | .rpm | 通过 dnf/yum 安装（需要 sudo） |
 | AppImage | 直接复制，设置执行权限 |
 | 单文件二进制 | 直接复制 |
+| Windows 便携 .exe/zip | 安装到 `%LOCALAPPDATA%\deca\packages\<name>\<version>`，并通过 `%LOCALAPPDATA%\deca\bin` 暴露到 PATH |
+| Windows .msi | 使用 `msiexec /qn /norestart` 安装和卸载 |
+| Windows 安装器 .exe | 启动 GUI 安装器并等待结束；卸载仍需用户手动完成 |
+
+Windows 下 `install_type` 可选 `auto`、`portable`、`msi`、`installer`。默认 `auto` 会把 `.msi` 当作 MSI 包，把直接的 `.exe` 当作便携可执行文件。传统 GUI 安装器请显式设置 `install_type = "installer"`。
 
 ## 下载缓存
 
@@ -236,6 +244,7 @@ deca mirror add "My Mirror" https://mirror.example.com
 | 状态 | `~/.local/state/deca/state.json` | `%LOCALAPPDATA%\deca\state.json` |
 | 缓存 | `~/.cache/deca` | `%LOCALAPPDATA%\deca\cache` |
 | 二进制 | `~/.local/bin` | `%LOCALAPPDATA%\deca\bin` |
+| Windows 包根目录 | 不适用 | `%LOCALAPPDATA%\deca\packages` |
 | 镜像配置 | `~/.config/deca/mirrors.toml` | `%APPDATA%\deca\mirrors.toml` |
 
 ## 全局选项

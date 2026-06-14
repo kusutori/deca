@@ -5,7 +5,7 @@ Deca is a declarative package manager for command-line tools. It downloads binar
 ## Features
 
 - Declarative config in TOML
-- Multiple asset formats: binaries, tar.gz/tar.xz/zip, .deb/.rpm, AppImage
+- Multiple asset formats: binaries, tar.gz/tar.xz/zip, .deb/.rpm, AppImage, Windows .exe/.msi
 - Interactive asset selection
 - State tracking (installed version and timestamp)
 - Download cache to avoid repeated downloads
@@ -80,6 +80,9 @@ bat = "sharkdp/bat"
 # Full format
 zellij = { repo = "zellij-org/zellij", asset = "*.deb" }
 neovim = { repo = "neovim/neovim", version = "0.10.0" }
+
+# Windows interactive installer
+sourcegit = { repo = "sourcegit-scm/sourcegit", asset = "*.exe", install_type = "installer" }
 
 [settings]
 auto_update = true
@@ -162,6 +165,11 @@ source ~/.config/nushell/completions/deca.nu
 | .rpm | Install via dnf/yum (sudo required) |
 | AppImage | Copy directly and mark executable |
 | Single binary | Copy directly |
+| Windows portable .exe/zip | Install to `%LOCALAPPDATA%\\deca\\packages\\<name>\\<version>` and expose through `%LOCALAPPDATA%\\deca\\bin` |
+| Windows .msi | Install/uninstall with `msiexec /qn /norestart` |
+| Windows installer .exe | Run the GUI installer and wait for it to exit; uninstall remains manual |
+
+On Windows, `install_type` can be `auto`, `portable`, `msi`, or `installer`. The default `auto` treats `.msi` as MSI packages and direct `.exe` files as portable executables. Use `install_type = "installer"` for traditional GUI installers.
 
 ## Download Cache
 
@@ -211,6 +219,7 @@ Install state is stored at `~/.local/state/deca/state.json`:
 | State | `~/.local/state/deca/state.json` | `%LOCALAPPDATA%\\deca\\state.json` |
 | Cache | `~/.cache/deca` | `%LOCALAPPDATA%\\deca\\cache` |
 | Binary dir | `~/.local/bin` | `%LOCALAPPDATA%\\deca\\bin` |
+| Windows package root | n/a | `%LOCALAPPDATA%\\deca\\packages` |
 | Mirror config | `~/.config/deca/mirrors.toml` | `%APPDATA%\\deca\\mirrors.toml` |
 
 ## Global Options

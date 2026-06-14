@@ -6,7 +6,6 @@ import (
 	"os"
 	"strings"
 	"sync"
-	"time"
 
 	"github.com/kusutori/deca/internal/config"
 	decaerrors "github.com/kusutori/deca/internal/errors"
@@ -175,7 +174,7 @@ func installPackage(ctx context.Context, ghClient *github.Client, installer *ins
 	}
 
 	printStatus(fmt.Sprintf("Installing %s v%s...", name, release.TagName))
-	result, err := installer.Install(name, release, asset)
+	result, err := installer.Install(name, release, asset, pkg.InstallType)
 	if err != nil {
 		if backupPath != "" {
 			_ = install.RestoreFile(backupPath, targetPath)
@@ -186,26 +185,8 @@ func installPackage(ctx context.Context, ghClient *github.Client, installer *ins
 		_ = install.RemoveBackup(backupPath)
 	}
 
-	// Create versioned symlink if requested and binary was installed
-	if pkg.Versioned && result.BinaryPath != "" {
-		versionedPath, symlinkErr := install.CreateVersionedSymlink(installer.BinDir, name, release.TagName, result.BinaryPath)
-		if symlinkErr != nil {
-			ui.Warning.Printf("Warning: failed to create versioned symlink for %s: %v\n", name, symlinkErr)
-		} else {
-			result.VersionedBinaryPath = versionedPath
-		}
-	}
-
 	// Update state
-	state.SetPackage(name, config.InstalledPackage{
-		Repo:                pkg.Repo,
-		Version:             release.TagName,
-		AssetName:           asset.Name,
-		InstallType:         result.InstallType,
-		InstalledAt:         time.Now(),
-		SystemPkgName:       result.SystemPkgName,
-		VersionedBinaryPath: result.VersionedBinaryPath,
-	})
+	state.SetPackage(name, installedPackageFromResult(name, pkg, installer, release, result))
 
 	// Auto-create desktop entry for AppImage if desktop config is present
 	if result.InstallType == config.InstallTypeAppImage && pkg.Desktop != nil {

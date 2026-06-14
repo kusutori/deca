@@ -269,6 +269,42 @@ func TestLoadStateWithSystemPkgName(t *testing.T) {
 	}
 }
 
+func TestStateWithWindowsInstallMetadata(t *testing.T) {
+	state := &State{
+		Packages: map[string]InstalledPackage{
+			"tool": {
+				Repo:        "owner/tool",
+				Version:     "v1.2.3",
+				AssetName:   "tool-windows-amd64.zip",
+				InstallType: InstallTypeBinary,
+				InstalledAt: time.Now(),
+				InstallRoot: filepath.Join("C:", "Users", "me", "AppData", "Local", "deca", "packages", "tool", "v1.2.3"),
+				ExposedPath: filepath.Join("C:", "Users", "me", "AppData", "Local", "deca", "bin", "tool.exe"),
+				ProductCode: "{00000000-0000-0000-0000-000000000000}",
+				LinkType:    "hardlink",
+			},
+		},
+	}
+
+	tmpDir := t.TempDir()
+	statePath := filepath.Join(tmpDir, "state.json")
+	if err := state.SaveState(statePath); err != nil {
+		t.Fatalf("failed to save state: %v", err)
+	}
+
+	loaded, err := LoadState(statePath)
+	if err != nil {
+		t.Fatalf("failed to load state: %v", err)
+	}
+	pkg, ok := loaded.Packages["tool"]
+	if !ok {
+		t.Fatal("tool package not found")
+	}
+	if pkg.InstallRoot == "" || pkg.ExposedPath == "" || pkg.ProductCode == "" || pkg.LinkType != "hardlink" {
+		t.Fatalf("windows metadata was not preserved: %+v", pkg)
+	}
+}
+
 func TestLoadStateReadFailure(t *testing.T) {
 	orig := stateReadFile
 	stateReadFile = func(string) ([]byte, error) { return nil, os.ErrPermission }

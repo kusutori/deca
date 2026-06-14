@@ -103,14 +103,15 @@ type DesktopConfig struct {
 
 // Package represents a single package configuration
 type Package struct {
-	Repo       string         `toml:"repo"`
-	Asset      string         `toml:"asset"`
-	Version    string         `toml:"version"`
-	OS         string         `toml:"os"`
-	Arch       string         `toml:"arch"`
-	Desktop    *DesktopConfig `toml:"desktop"`
-	Versioned  bool           `toml:"versioned"`  // Keep versioned binaries with symlink
-	Prerelease bool           `toml:"prerelease"` // Allow selecting pre-release versions when version is not pinned
+	Repo        string         `toml:"repo"`
+	Asset       string         `toml:"asset"`
+	Version     string         `toml:"version"`
+	OS          string         `toml:"os"`
+	Arch        string         `toml:"arch"`
+	InstallType string         `toml:"install_type"`
+	Desktop     *DesktopConfig `toml:"desktop"`
+	Versioned   bool           `toml:"versioned"`  // Keep versioned binaries with symlink
+	Prerelease  bool           `toml:"prerelease"` // Allow selecting pre-release versions when version is not pinned
 }
 
 // Settings represents optional settings
@@ -184,6 +185,9 @@ func Load(path string) (*Config, error) {
 				}
 				if arch, ok := v["arch"].(string); ok {
 					pkg.Arch = arch
+				}
+				if installType, ok := v["install_type"].(string); ok {
+					pkg.InstallType = installType
 				}
 				// Parse desktop config
 				if desktop, ok := v["desktop"].(map[string]interface{}); ok {

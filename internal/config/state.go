@@ -17,10 +17,12 @@ var (
 type InstallType string
 
 const (
-	InstallTypeBinary   InstallType = "binary"   // Extracted from tar.gz/zip
-	InstallTypeAppImage InstallType = "appimage" // AppImage executable
-	InstallTypeSystem   InstallType = "system"   // System package (.deb/.rpm)
-	InstallTypeSingle   InstallType = "single"   // Single binary file
+	InstallTypeBinary           InstallType = "binary"            // Extracted from tar.gz/zip
+	InstallTypeAppImage         InstallType = "appimage"          // AppImage executable
+	InstallTypeSystem           InstallType = "system"            // System package (.deb/.rpm)
+	InstallTypeSingle           InstallType = "single"            // Single binary file
+	InstallTypeWindowsMSI       InstallType = "windows-msi"       // Windows MSI package
+	InstallTypeWindowsInstaller InstallType = "windows-installer" // Interactive Windows installer
 )
 
 // InstalledPackage represents the state of an installed package
@@ -32,6 +34,10 @@ type InstalledPackage struct {
 	InstalledAt         time.Time   `json:"installed_at"`
 	SystemPkgName       string      `json:"system_pkg_name,omitempty"`       // Actual package name for system packages
 	VersionedBinaryPath string      `json:"versioned_binary_path,omitempty"` // Path to versioned binary (e.g. eza-v0.20.0)
+	InstallRoot         string      `json:"install_root,omitempty"`          // Root directory used for versioned Windows portable installs
+	ExposedPath         string      `json:"exposed_path,omitempty"`          // Path exposed through the configured bin directory
+	ProductCode         string      `json:"product_code,omitempty"`          // Windows Installer product code for MSI uninstall
+	LinkType            string      `json:"link_type,omitempty"`             // How ExposedPath points at the real binary (hardlink/copy)
 }
 
 // State represents the installation state

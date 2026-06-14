@@ -5,10 +5,10 @@ import (
 	"os"
 	"runtime"
 
+	"github.com/fatih/color"
 	"github.com/kusutori/deca/internal/config"
 	"github.com/kusutori/deca/internal/install"
 	"github.com/kusutori/deca/internal/ui"
-	"github.com/fatih/color"
 	"github.com/spf13/cobra"
 )
 
@@ -57,6 +57,9 @@ along with their installed status.`,
 			binaryPath := installer.BinDir + "/" + name
 			if runtime.GOOS == "windows" {
 				binaryPath += ".exe"
+			}
+			if installed.ExposedPath != "" {
+				binaryPath = installed.ExposedPath
 			}
 
 			var statusColor interface{}

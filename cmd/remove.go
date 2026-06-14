@@ -55,7 +55,11 @@ Multiple packages can be removed at once by specifying multiple names.`,
 
 			if !keepInstalled && installed {
 				installer := install.NewInstaller(cfg.BinDir)
-				err := installer.Uninstall(name, installedPkg.InstallType, installedPkg.SystemPkgName)
+				err := installer.Uninstall(name, installedPkg.InstallType, installedPkg.SystemPkgName, install.UninstallMetadata{
+					InstallRoot: installedPkg.InstallRoot,
+					ExposedPath: installedPkg.ExposedPath,
+					ProductCode: installedPkg.ProductCode,
+				})
 				if err != nil {
 					ui.Warning.Printf("Warning: failed to uninstall %s: %v\n", name, err)
 					ui.Info.Println("You may need to manually remove the package")
@@ -65,11 +69,15 @@ Multiple packages can be removed at once by specifying multiple names.`,
 						ui.Success.Printf("Removed system package %s\n", name)
 					case config.InstallTypeAppImage:
 						ui.Success.Printf("Removed AppImage %s\n", name)
+					case config.InstallTypeWindowsMSI:
+						ui.Success.Printf("Removed Windows MSI package %s\n", name)
+					case config.InstallTypeWindowsInstaller:
+						ui.Success.Printf("Removed %s from deca state\n", name)
 					default:
 						ui.Success.Printf("Removed binary %s\n", name)
 					}
 				}
-				if installedPkg.VersionedBinaryPath != "" {
+				if installedPkg.VersionedBinaryPath != "" && installedPkg.InstallRoot == "" {
 					symlinkPath := filepath.Join(expandPath(cfg.BinDir), name)
 					if removeErr := install.UninstallVersioned(symlinkPath, installedPkg.VersionedBinaryPath); removeErr != nil {
 						ui.Warning.Printf("Warning: failed to remove versioned binary: %v\n", removeErr)

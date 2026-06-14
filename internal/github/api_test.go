@@ -2,8 +2,8 @@ package github
 
 import (
 	"context"
-	"errors"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -11,8 +11,8 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/kusutori/deca/internal/config"
 	gh "github.com/google/go-github/v60/github"
+	"github.com/kusutori/deca/internal/config"
 )
 
 func TestGetLatestReleaseWithOptions_IncludePrerelease(t *testing.T) {
@@ -142,6 +142,7 @@ func TestMatchesOSArch(t *testing.T) {
 		{"tool-windows.exe", "windows", "amd64", true},
 		{"tool-windows.exe", "windows", "", true},
 		{"tool-windows-amd64.zip", "windows", "amd64", true},
+		{"ToolSetup.msi", "windows", "amd64", true},
 		{"tool-windows.exe", "linux", "amd64", false},
 
 		// No constraints
@@ -200,6 +201,7 @@ func TestFindMatchingAsset(t *testing.T) {
 			{Name: "tool-linux-arm64.tar.gz", DownloadURL: "http://example.com/linux-arm64.tar.gz"},
 			{Name: "tool-darwin-amd64.tar.gz", DownloadURL: "http://example.com/darwin-amd64.tar.gz"},
 			{Name: "tool-windows-amd64.zip", DownloadURL: "http://example.com/windows-amd64.zip"},
+			{Name: "ToolSetup.msi", DownloadURL: "http://example.com/tool.msi"},
 		},
 	}
 
@@ -215,6 +217,7 @@ func TestFindMatchingAsset(t *testing.T) {
 		{"linux arm64", "", "linux", "arm64", "tool-linux-arm64.tar.gz", false},
 		{"darwin amd64", "", "darwin", "amd64", "tool-darwin-amd64.tar.gz", false},
 		{"windows", "", "windows", "amd64", "tool-windows-amd64.zip", false},
+		{"windows msi", "*.msi", "windows", "amd64", "ToolSetup.msi", false},
 		{"no match", "", "freebsd", "amd64", "", true},
 	}
 
