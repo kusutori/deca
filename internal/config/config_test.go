@@ -158,6 +158,52 @@ func TestPackageRef(t *testing.T) {
 	}
 }
 
+func TestDefaultDirsAndSaveLoadDefault(t *testing.T) {
+	oldHome := getenvFunc("HOME")
+	oldUserProfile := getenvFunc("USERPROFILE")
+	oldLocalAppData := getenvFunc("LOCALAPPDATA")
+	tmpDir := t.TempDir()
+	t.Setenv("HOME", tmpDir)
+	t.Setenv("USERPROFILE", "")
+	t.Setenv("LOCALAPPDATA", filepath.Join(tmpDir, "LocalAppData"))
+	t.Cleanup(func() {
+		t.Setenv("HOME", oldHome)
+		t.Setenv("USERPROFILE", oldUserProfile)
+		t.Setenv("LOCALAPPDATA", oldLocalAppData)
+	})
+
+	if got := DefaultConfigDir(); got != filepath.Join(tmpDir, ".config", "deca") {
+		t.Fatalf("DefaultConfigDir = %s", got)
+	}
+	if got := DefaultDesktopDir(); got != filepath.Join(tmpDir, ".local", "share", "applications") {
+		t.Fatalf("DefaultDesktopDir = %s", got)
+	}
+	if got := DesktopEntryPath("tool"); got != filepath.Join(tmpDir, ".local", "share", "applications", "tool.desktop") {
+		t.Fatalf("DesktopEntryPath = %s", got)
+	}
+
+	cfg := &Config{
+		BinDir:   filepath.Join(tmpDir, "bin"),
+		OS:       "linux",
+		Arch:     "amd64",
+		Packages: map[string]Package{"tool": {Repo: "owner/tool"}},
+	}
+	path := filepath.Join(DefaultConfigDir(), "deca.toml")
+	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := Save(cfg, path); err != nil {
+		t.Fatalf("Save failed: %v", err)
+	}
+	loaded, err := LoadDefault()
+	if err != nil {
+		t.Fatalf("LoadDefault failed: %v", err)
+	}
+	if loaded.Packages["tool"].Repo != "owner/tool" {
+		t.Fatalf("unexpected loaded config: %+v", loaded)
+	}
+}
+
 func TestLoadInvalidTOML(t *testing.T) {
 	tmpDir := t.TempDir()
 	configPath := filepath.Join(tmpDir, "broken.toml")

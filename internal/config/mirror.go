@@ -171,12 +171,12 @@ func (c *MirrorConfig) GetCurrentMirror() *Mirror {
 
 // GetMirrorPath returns the path to the mirror config file
 func GetMirrorPath() string {
-	home, _ := os.UserHomeDir()
-	if home == "" {
-		home = os.Getenv("HOME")
-	}
+	home := os.Getenv("HOME")
 	if home == "" {
 		home = os.Getenv("USERPROFILE")
+	}
+	if home == "" {
+		home, _ = os.UserHomeDir()
 	}
 	return filepath.Join(home, ".config", "deca", "mirrors.toml")
 }

@@ -14,12 +14,12 @@ type Cache struct {
 
 // NewCache creates a new cache manager
 func NewCache() *Cache {
-	home, _ := os.UserHomeDir()
-	if home == "" {
-		home = os.Getenv("HOME")
-	}
+	home := os.Getenv("HOME")
 	if home == "" {
 		home = os.Getenv("USERPROFILE")
+	}
+	if home == "" {
+		home, _ = os.UserHomeDir()
 	}
 
 	// Use XDG cache dir if available, otherwise ~/.cache/deca

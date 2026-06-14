@@ -77,11 +77,12 @@ func TestGetCurrentMirror(t *testing.T) {
 
 func TestGetMirrorPath(t *testing.T) {
 	oldHome := os.Getenv("HOME")
-	os.Setenv("HOME", "/test/home")
+	testHome := filepath.Join(string(filepath.Separator), "test", "home")
+	os.Setenv("HOME", testHome)
 	defer os.Setenv("HOME", oldHome)
 
 	path := GetMirrorPath()
-	expected := "/test/home/.config/deca/mirrors.toml"
+	expected := filepath.Join(testHome, ".config", "deca", "mirrors.toml")
 
 	if path != expected {
 		t.Errorf("expected %s, got %s", expected, path)
@@ -113,6 +114,58 @@ func TestSaveAndLoadMirrorConfig(t *testing.T) {
 	// Verify file exists (LoadMirrorConfig currently returns default)
 	if _, err := os.Stat(path); err != nil {
 		t.Error("config file was not created")
+	}
+}
+
+func TestLoadMirrorConfigFallbacksAndErrors(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	missing, err := LoadMirrorConfig(filepath.Join(tmpDir, "missing.toml"))
+	if err != nil {
+		t.Fatalf("missing config should use defaults: %v", err)
+	}
+	if missing.CurrentName != "GitHub (Official)" || len(missing.Mirrors) == 0 {
+		t.Fatalf("unexpected default mirror config: %+v", missing)
+	}
+
+	invalidPath := filepath.Join(tmpDir, "invalid.toml")
+	if err := os.WriteFile(invalidPath, []byte("not = [valid"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	invalid, err := LoadMirrorConfig(invalidPath)
+	if err != nil {
+		t.Fatalf("invalid config should fall back to defaults: %v", err)
+	}
+	if invalid.CurrentName != "GitHub (Official)" {
+		t.Fatalf("unexpected invalid fallback: %+v", invalid)
+	}
+
+	emptyPath := filepath.Join(tmpDir, "empty.toml")
+	if err := os.WriteFile(emptyPath, []byte("current = \"\"\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	empty, err := LoadMirrorConfig(emptyPath)
+	if err != nil {
+		t.Fatalf("empty config should load: %v", err)
+	}
+	if empty.CurrentName != "GitHub (Official)" || len(empty.Mirrors) == 0 {
+		t.Fatalf("expected defaults merged for empty config: %+v", empty)
+	}
+
+	if err := SaveMirrorConfig(string([]byte{0}), DefaultMirrorConfig()); err == nil {
+		t.Fatal("expected invalid path error")
+	}
+}
+
+func TestLoadCurrentMirrorFallback(t *testing.T) {
+	oldHome := os.Getenv("HOME")
+	tmpDir := t.TempDir()
+	os.Setenv("HOME", tmpDir)
+	t.Cleanup(func() { os.Setenv("HOME", oldHome) })
+
+	mirror := LoadCurrentMirror()
+	if mirror == nil || mirror.Name != "GitHub (Official)" {
+		t.Fatalf("unexpected current mirror: %+v", mirror)
 	}
 }
 

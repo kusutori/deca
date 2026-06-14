@@ -72,3 +72,29 @@ func TestPackageMatches_InvalidExpr(t *testing.T) {
 		t.Fatal("expected error for invalid expression")
 	}
 }
+
+func TestPackageMatches_ComplexExpressionsAndErrors(t *testing.T) {
+	pkg := &Package{OS: "!(windows) && (linux || darwin)", Arch: "!(386) && amd64"}
+	ok, _, _, err := PackageMatches(pkg, "linux", "amd64")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !ok {
+		t.Fatal("expected complex expression to match")
+	}
+
+	pkg = &Package{OS: "linux && @ windows"}
+	if _, _, _, err := PackageMatches(pkg, "linux", "amd64"); err == nil {
+		t.Fatal("expected tokenizer error")
+	}
+
+	pkg = &Package{OS: "(linux || darwin"}
+	if _, _, _, err := PackageMatches(pkg, "linux", "amd64"); err == nil {
+		t.Fatal("expected missing paren error")
+	}
+
+	pkg = &Package{Arch: "amd64 &&"}
+	if _, _, _, err := PackageMatches(pkg, "linux", "amd64"); err == nil {
+		t.Fatal("expected arch expression error")
+	}
+}

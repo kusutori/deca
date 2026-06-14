@@ -216,7 +216,6 @@ func downloadFileWithCache(url, path, repo, version, assetName, digest string) e
 	if err != nil {
 		return err
 	}
-	defer out.Close()
 
 	// Get content length for progress bar
 	contentLength := resp.ContentLength
@@ -238,6 +237,11 @@ func downloadFileWithCache(url, path, repo, version, assetName, digest string) e
 	}
 
 	if err != nil {
+		_ = out.Close()
+		downloadRemove(tmpPath)
+		return err
+	}
+	if err := out.Close(); err != nil {
 		downloadRemove(tmpPath)
 		return err
 	}
@@ -303,7 +307,8 @@ func verifyChecksumIfAvailable(filePath, assetName string) error {
 	// Try GitHub API digest first (new feature, preferred)
 	if assetDigest != "" {
 		fmt.Fprintf(os.Stderr, "[cyan]Verifying checksum (GitHub API)... [reset]")
-		if err := VerifyChecksum(filePath, assetDigest, ChecksumTypeSHA256); err != nil {
+		expected := strings.TrimPrefix(assetDigest, string(ChecksumTypeSHA256)+":")
+		if err := VerifyChecksum(filePath, expected, ChecksumTypeSHA256); err != nil {
 			fmt.Fprintf(os.Stderr, "\n")
 			return fmt.Errorf("checksum verification failed: %w", err)
 		}

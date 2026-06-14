@@ -2,6 +2,8 @@ package install
 
 import (
 	"errors"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -325,6 +327,179 @@ func TestExposeWindowsExecutable(t *testing.T) {
 	}
 	if string(data) != "portable exe" {
 		t.Fatalf("unexpected exposed content: %q", string(data))
+	}
+}
+
+func TestWindowsInstallRootAndHelpers(t *testing.T) {
+	oldLocalAppData := os.Getenv("LOCALAPPDATA")
+	tmpDir := t.TempDir()
+	os.Setenv("LOCALAPPDATA", tmpDir)
+	t.Cleanup(func() { os.Setenv("LOCALAPPDATA", oldLocalAppData) })
+
+	root := WindowsInstallRoot(`bad/name:tool`, `v1.0.0`)
+	want := filepath.Join(tmpDir, "deca", "packages", "bad_name_tool", "v1.0.0")
+	if root != want {
+		t.Fatalf("unexpected install root: got %s want %s", root, want)
+	}
+
+	files := []string{"bin/tool.exe", "README.md"}
+	srcRoot := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(srcRoot, "bin"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(srcRoot, "bin", "tool.exe"), []byte("exe"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(srcRoot, "README.md"), []byte("readme"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	dstRoot := t.TempDir()
+	if err := copyExtractedFiles(srcRoot, dstRoot, files); err != nil {
+		t.Fatalf("copyExtractedFiles failed: %v", err)
+	}
+	if got := firstWindowsExecutable(files); got != "bin/tool.exe" {
+		t.Fatalf("expected first exe, got %q", got)
+	}
+	if _, err := os.Stat(filepath.Join(dstRoot, "bin", "tool.exe")); err != nil {
+		t.Fatalf("copied exe missing: %v", err)
+	}
+	if err := copyExtractedFiles(srcRoot, dstRoot, []string{"../escape.exe"}); err == nil {
+		t.Fatal("expected unsafe archive path error")
+	}
+}
+
+func TestUninstallPortableAndAppImage(t *testing.T) {
+	tmpDir := t.TempDir()
+	binDir := filepath.Join(tmpDir, "bin")
+	if err := os.MkdirAll(binDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	installer := NewInstaller(binDir)
+
+	appImagePath := filepath.Join(binDir, "app")
+	if err := os.WriteFile(appImagePath, []byte("appimage"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := installer.Uninstall("app", config.InstallTypeAppImage, ""); err != nil {
+		t.Fatalf("uninstall appimage failed: %v", err)
+	}
+	if _, err := os.Stat(appImagePath); !os.IsNotExist(err) {
+		t.Fatal("expected appimage removed")
+	}
+
+	installRoot := filepath.Join(tmpDir, "packages", "tool", "v1")
+	exposedPath := filepath.Join(binDir, "tool.exe")
+	if err := os.MkdirAll(installRoot, 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(exposedPath, []byte("exe"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := installer.uninstallWindowsPortable("tool", UninstallMetadata{
+		InstallRoot: installRoot,
+		ExposedPath: exposedPath,
+	}); err != nil {
+		t.Fatalf("uninstall windows portable failed: %v", err)
+	}
+	if _, err := os.Stat(exposedPath); !os.IsNotExist(err) {
+		t.Fatal("expected exposed exe removed")
+	}
+	if _, err := os.Stat(installRoot); !os.IsNotExist(err) {
+		t.Fatal("expected install root removed")
+	}
+}
+
+func TestVersionedSymlinkAndRollbackHelpers(t *testing.T) {
+	tmpDir := t.TempDir()
+	binDir := filepath.Join(tmpDir, "bin")
+	if err := os.MkdirAll(binDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	current := filepath.Join(binDir, "tool")
+	if err := os.WriteFile(current, []byte("v1"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	versioned, err := CreateVersionedSymlink(binDir, "tool", "v1.0.0", current)
+	if err != nil {
+		t.Fatalf("CreateVersionedSymlink failed: %v", err)
+	}
+	if _, err := os.Stat(versioned); err != nil {
+		t.Fatalf("versioned binary missing: %v", err)
+	}
+	if err := UninstallVersioned(current, versioned); err != nil {
+		t.Fatalf("UninstallVersioned failed: %v", err)
+	}
+	if _, err := os.Stat(versioned); !os.IsNotExist(err) {
+		t.Fatal("expected versioned binary removed")
+	}
+
+	backup := filepath.Join(tmpDir, "missing.bak")
+	if err := RestoreFile("", current); err != nil {
+		t.Fatalf("empty restore should be no-op: %v", err)
+	}
+	if err := RemoveBackup(backup); err != nil {
+		t.Fatalf("missing backup removal should be no-op: %v", err)
+	}
+	if err := os.WriteFile(backup, []byte("backup"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := RemoveBackup(backup); err != nil {
+		t.Fatalf("RemoveBackup failed: %v", err)
+	}
+}
+
+func TestDetectPackageTypeAllKnownTypes(t *testing.T) {
+	tests := map[string]string{
+		"tool.deb": "deb",
+		"tool.rpm": "rpm",
+		"tool.msi": "msi",
+		"tool.apk": "apk",
+		"tool.dmg": "dmg",
+		"tool.zip": "",
+	}
+	for name, want := range tests {
+		if got := DetectPackageType(name); got != want {
+			t.Fatalf("DetectPackageType(%q) = %q, want %q", name, got, want)
+		}
+	}
+}
+
+func TestInstallWindowsPortableSingleExe(t *testing.T) {
+	if runtime.GOOS != "windows" {
+		t.Skip("windows portable install path is only active on Windows")
+	}
+
+	tmpDir := t.TempDir()
+	oldLocalAppData := os.Getenv("LOCALAPPDATA")
+	oldHome := os.Getenv("HOME")
+	os.Setenv("LOCALAPPDATA", tmpDir)
+	os.Setenv("HOME", tmpDir)
+	t.Cleanup(func() {
+		os.Setenv("LOCALAPPDATA", oldLocalAppData)
+		os.Setenv("HOME", oldHome)
+	})
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte("exe payload"))
+	}))
+	defer server.Close()
+
+	installer := NewInstaller(filepath.Join(tmpDir, "bin"))
+	release := &github.ReleaseInfo{TagName: "v1.0.0", Owner: "owner", Repo: "repo"}
+	asset := &github.AssetInfo{Name: "tool.exe", DownloadURL: server.URL}
+
+	result, err := installer.Install("tool", release, asset)
+	if err != nil {
+		t.Fatalf("Install failed: %v", err)
+	}
+	if result.InstallRoot == "" || result.ExposedPath == "" || result.VersionedBinaryPath == "" {
+		t.Fatalf("expected windows install metadata: %+v", result)
+	}
+	if _, err := os.Stat(result.ExposedPath); err != nil {
+		t.Fatalf("expected exposed executable: %v", err)
+	}
+	if _, err := os.Stat(result.VersionedBinaryPath); err != nil {
+		t.Fatalf("expected versioned executable: %v", err)
 	}
 }
 

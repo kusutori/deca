@@ -3,6 +3,7 @@ package pydeca
 import (
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 )
@@ -67,7 +68,75 @@ func TestInjectSchema(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read config: %v", err)
 	}
-	if !strings.Contains(string(data), `"$schema" = "`+schemaPath+`"`) {
+	if !strings.Contains(string(data), `"$schema" = `+strconv.Quote(schemaPath)) {
 		t.Fatalf("schema reference not injected: %s", string(data))
+	}
+}
+
+func TestClientConvenienceMethods(t *testing.T) {
+	dir := t.TempDir()
+	oldHome := os.Getenv("HOME")
+	os.Setenv("HOME", dir)
+	t.Cleanup(func() { os.Setenv("HOME", oldHome) })
+
+	cfgPath := filepath.Join(dir, "deca.toml")
+	schemaPath := filepath.Join(dir, "schema.json")
+	content := `
+bin_dir = "/tmp/bin"
+
+[packages]
+eza = "eza-community/eza"
+`
+	if err := os.WriteFile(cfgPath, []byte(content), 0644); err != nil {
+		t.Fatalf("write config: %v", err)
+	}
+
+	client := NewClient(cfgPath)
+	if client.ConfigPath != cfgPath {
+		t.Fatalf("unexpected client config path: %s", client.ConfigPath)
+	}
+	if NewClient("").ConfigPath == "" {
+		t.Fatal("expected default client path")
+	}
+	if NewDefaultClient().ConfigPath == "" {
+		t.Fatal("expected default client path")
+	}
+	if DefaultConfigPath() == "" || DefaultSchemaPath() == "" || Version() == "" {
+		t.Fatal("expected default metadata")
+	}
+
+	schemaJSON, err := client.GenerateSchemaJSON()
+	if err != nil {
+		t.Fatalf("client GenerateSchemaJSON failed: %v", err)
+	}
+	if !strings.Contains(schemaJSON, "Deca Configuration") {
+		t.Fatalf("unexpected schema json: %s", schemaJSON)
+	}
+	if err := client.WriteSchema(schemaPath); err != nil {
+		t.Fatalf("client WriteSchema failed: %v", err)
+	}
+	if _, err := os.Stat(schemaPath); err != nil {
+		t.Fatalf("schema file missing: %v", err)
+	}
+	if err := client.WriteSchema(""); err != nil {
+		t.Fatalf("client WriteSchema default path failed: %v", err)
+	}
+
+	cfgJSON, err := client.LoadConfigJSON()
+	if err != nil {
+		t.Fatalf("client LoadConfigJSON failed: %v", err)
+	}
+	if !strings.Contains(cfgJSON, "eza-community/eza") {
+		t.Fatalf("unexpected config json: %s", cfgJSON)
+	}
+	names, err := client.ListPackageNames()
+	if err != nil {
+		t.Fatalf("client ListPackageNames failed: %v", err)
+	}
+	if len(names) != 1 || names[0] != "eza" {
+		t.Fatalf("unexpected names: %+v", names)
+	}
+	if err := client.InjectSchema(schemaPath); err != nil {
+		t.Fatalf("client InjectSchema failed: %v", err)
 	}
 }

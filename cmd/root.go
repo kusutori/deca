@@ -4,11 +4,12 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"path/filepath"
 	"runtime"
 	"strings"
 
-	"github.com/kusutori/deca/internal/ui"
 	"github.com/fatih/color"
+	"github.com/kusutori/deca/internal/ui"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 )
@@ -145,7 +146,7 @@ func defaultConfigPath() string {
 	if home == "" {
 		home = os.Getenv("USERPROFILE")
 	}
-	return fmt.Sprintf("%s/.config/deca/deca.toml", home)
+	return filepath.Join(home, ".config", "deca", "deca.toml")
 }
 
 // getContext returns a context with cancellation

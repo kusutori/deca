@@ -19,6 +19,7 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/fatih/color"
 	"github.com/kusutori/deca/internal/config"
 )
 
@@ -140,18 +141,26 @@ func runCmd(t *testing.T, args ...string) (string, string, error) {
 	oldStderr := os.Stderr
 	oldCmdOut := RootCmd.OutOrStdout()
 	oldCmdErr := RootCmd.ErrOrStderr()
+	oldColorOutput := color.Output
+	oldColorError := color.Error
 	rOut, wOut, _ := os.Pipe()
 	rErr, wErr, _ := os.Pipe()
 	os.Stdout = wOut
 	os.Stderr = wErr
+	color.Output = wOut
+	color.Error = wErr
 	RootCmd.SetOut(wOut)
 	RootCmd.SetErr(wErr)
+	resetCommandFlags(RootCmd)
 
 	defer func() {
 		os.Stdout = oldStdout
 		os.Stderr = oldStderr
+		color.Output = oldColorOutput
+		color.Error = oldColorError
 		RootCmd.SetOut(oldCmdOut)
 		RootCmd.SetErr(oldCmdErr)
+		resetCommandFlags(RootCmd)
 	}()
 
 	verbose = false

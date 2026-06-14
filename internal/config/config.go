@@ -16,38 +16,17 @@ var (
 
 // DefaultConfigDir returns the default configuration directory
 func DefaultConfigDir() string {
-	home, _ := userHomeDirFunc()
-	if home == "" {
-		home = getenvFunc("HOME")
-	}
-	if home == "" {
-		home = getenvFunc("USERPROFILE")
-	}
-	return filepath.Join(home, ".config", "deca")
+	return filepath.Join(defaultHomeDir(), ".config", "deca")
 }
 
 // DefaultStateDir returns the default state directory
 func DefaultStateDir() string {
-	home, _ := userHomeDirFunc()
-	if home == "" {
-		home = getenvFunc("HOME")
-	}
-	if home == "" {
-		home = getenvFunc("USERPROFILE")
-	}
-	return filepath.Join(home, ".local", "state", "deca")
+	return filepath.Join(defaultHomeDir(), ".local", "state", "deca")
 }
 
 // DefaultDesktopDir returns the default desktop entry directory
 func DefaultDesktopDir() string {
-	home, _ := userHomeDirFunc()
-	if home == "" {
-		home = getenvFunc("HOME")
-	}
-	if home == "" {
-		home = getenvFunc("USERPROFILE")
-	}
-	return filepath.Join(home, ".local", "share", "applications")
+	return filepath.Join(defaultHomeDir(), ".local", "share", "applications")
 }
 
 // DesktopEntryPath returns the path for a .desktop entry file
@@ -57,19 +36,27 @@ func DesktopEntryPath(name string) string {
 
 // DefaultBinDir returns the default binary directory
 func DefaultBinDir() string {
-	home, _ := userHomeDirFunc()
-	if home == "" {
-		home = getenvFunc("HOME")
-	}
-	if home == "" {
-		home = getenvFunc("USERPROFILE")
-	}
+	home := defaultHomeDir()
 	switch runtime.GOOS {
 	case "windows":
-		return filepath.Join(getenvFunc("LOCALAPPDATA"), "deca", "bin")
+		if localAppData := getenvFunc("LOCALAPPDATA"); localAppData != "" {
+			return filepath.Join(localAppData, "deca", "bin")
+		}
+		return filepath.Join(home, "AppData", "Local", "deca", "bin")
 	default:
 		return filepath.Join(home, ".local", "bin")
 	}
+}
+
+func defaultHomeDir() string {
+	if home := getenvFunc("HOME"); home != "" {
+		return home
+	}
+	if home := getenvFunc("USERPROFILE"); home != "" {
+		return home
+	}
+	home, _ := userHomeDirFunc()
+	return home
 }
 
 // Config represents the main configuration file

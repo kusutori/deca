@@ -6,6 +6,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"net/http/httputil"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -48,6 +49,71 @@ func TestGetLatestReleaseWithOptions_IncludePrerelease(t *testing.T) {
 	}
 	if release.TagName != "v2.0.0-rc1" {
 		t.Fatalf("expected prerelease tag, got %s", release.TagName)
+	}
+}
+
+func TestReleaseAPIsAndSearch(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/repos/owner/repo/releases/latest":
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"tag_name":     "v1.0.0",
+				"html_url":     "https://example.com/v1",
+				"published_at": "2024-01-02T03:04:05Z",
+				"assets": []map[string]any{{
+					"name":                 "tool-linux-amd64.tar.gz",
+					"browser_download_url": "https://github.com/owner/repo/releases/download/v1.0.0/tool-linux-amd64.tar.gz",
+					"size":                 123,
+				}},
+			})
+		case "/repos/owner/repo/releases/tags/v1.0.0":
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"tag_name": "v1.0.0",
+				"assets":   []map[string]any{},
+			})
+		case "/search/repositories":
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"items": []map[string]any{{
+					"full_name":        "owner/repo",
+					"name":             "repo",
+					"description":      "desc",
+					"stargazers_count": 42,
+					"updated_at":       "2024-01-02T03:04:05Z",
+				}},
+			})
+		default:
+			dump, _ := httputil.DumpRequest(r, false)
+			t.Fatalf("unexpected request:\n%s", dump)
+		}
+	}))
+	defer server.Close()
+
+	client := NewClient()
+	client.client.BaseURL = mustParseURL(t, server.URL+"/")
+	client.client.UploadURL = mustParseURL(t, server.URL+"/")
+
+	latest, err := client.GetLatestRelease(context.Background(), "owner", "repo")
+	if err != nil {
+		t.Fatalf("GetLatestRelease failed: %v", err)
+	}
+	if latest.TagName != "v1.0.0" || latest.Assets[0].Name == "" || latest.Published == "" {
+		t.Fatalf("unexpected latest release: %+v", latest)
+	}
+
+	byTag, err := client.GetReleaseByTag(context.Background(), "owner", "repo", "v1.0.0")
+	if err != nil {
+		t.Fatalf("GetReleaseByTag failed: %v", err)
+	}
+	if byTag.TagName != "v1.0.0" {
+		t.Fatalf("unexpected tag release: %+v", byTag)
+	}
+
+	results, err := client.SearchRepositories(context.Background(), "repo")
+	if err != nil {
+		t.Fatalf("SearchRepositories failed: %v", err)
+	}
+	if len(results) != 1 || results[0].FullName != "owner/repo" || results[0].UpdatedAt != "2024-01-02" {
+		t.Fatalf("unexpected search results: %+v", results)
 	}
 }
 
@@ -238,6 +304,96 @@ func TestFindMatchingAsset(t *testing.T) {
 				t.Errorf("expected asset '%s', got '%s'", tt.want, asset.Name)
 			}
 		})
+	}
+}
+
+func TestAssetSelectionHelpers(t *testing.T) {
+	windowsAssets := []*AssetInfo{
+		{Name: "ToolSetup.msi"},
+		{Name: "tool-windows.zip"},
+		{Name: "tool.exe"},
+	}
+	if got := selectBestAsset(windowsAssets, "windows"); got.Name != "tool.exe" {
+		t.Fatalf("expected exe priority on windows, got %s", got.Name)
+	}
+
+	linuxAssets := []*AssetInfo{
+		{Name: "tool.rpm"},
+		{Name: "tool.AppImage"},
+		{Name: "tool.deb"},
+		{Name: "tool-linux-amd64.tar.gz"},
+	}
+	if got := selectBestAsset(linuxAssets, "linux"); got.Name != "tool-linux-amd64.tar.gz" {
+		t.Fatalf("expected archive priority on linux, got %s", got.Name)
+	}
+
+	if !hasArchiveSuffix("tool.msi") || !hasArchiveSuffix("tool.exe") || hasArchiveSuffix("tool") {
+		t.Fatal("unexpected archive suffix detection")
+	}
+	if !matchesAsset(&AssetInfo{Name: "tool-windows.exe"}, "*.exe", "windows", "amd64") {
+		t.Fatal("expected matchesAsset true")
+	}
+	if matchesAsset(&AssetInfo{Name: "tool-linux.tar.gz"}, "*.exe", "windows", "amd64") {
+		t.Fatal("expected matchesAsset false")
+	}
+
+	patterns := map[string]string{
+		"windows/amd64": guessAssetPattern("windows", "amd64"),
+		"linux/amd64":   guessAssetPattern("linux", "amd64"),
+		"darwin/arm64":  guessAssetPattern("darwin", "arm64"),
+		"unknown":       guessAssetPattern("", ""),
+	}
+	if patterns["windows/amd64"] != "windows" || patterns["unknown"] != "" {
+		t.Fatalf("unexpected guessed patterns: %+v", patterns)
+	}
+	if got := GetAssetDownloadURL("asset.zip", "owner", "repo", "v1"); got == "" {
+		t.Fatal("expected download URL")
+	}
+}
+
+func TestTokenTransportAddsAuthorization(t *testing.T) {
+	var gotAuth string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotAuth = r.Header.Get("Authorization")
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	defer server.Close()
+
+	client := http.Client{Transport: &tokenTransport{token: "secret"}}
+	resp, err := client.Get(server.URL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = resp.Body.Close()
+	if gotAuth != "Bearer secret" {
+		t.Fatalf("unexpected auth header: %q", gotAuth)
+	}
+}
+
+func TestFetchMultipleReleases(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/repos/bad/repo/releases/latest" {
+			http.Error(w, "nope", http.StatusNotFound)
+			return
+		}
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"tag_name": "v1.0.0",
+			"assets":   []map[string]any{},
+		})
+	}))
+	defer server.Close()
+
+	client := NewClient()
+	client.client.BaseURL = mustParseURL(t, server.URL+"/")
+	results, errs := client.FetchMultipleReleases(context.Background(), []struct{ Owner, Repo string }{
+		{"owner", "repo"},
+		{"bad", "repo"},
+	})
+	if len(results) != 2 || results[0] == nil || results[0].TagName != "v1.0.0" {
+		t.Fatalf("unexpected results: %+v", results)
+	}
+	if len(errs) != 1 {
+		t.Fatalf("expected one error, got %+v", errs)
 	}
 }
 

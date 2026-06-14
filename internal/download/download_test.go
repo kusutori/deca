@@ -2,6 +2,7 @@ package download
 
 import (
 	"archive/tar"
+	"archive/zip"
 	"compress/gzip"
 	"io"
 	"net"
@@ -9,9 +10,9 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
-	"strings"
 	"testing"
 
+	"github.com/kusutori/deca/internal/github"
 	"github.com/ulikunitz/xz"
 )
 
@@ -104,9 +105,32 @@ func TestExtractTarGz(t *testing.T) {
 }
 
 func TestExtractZip(t *testing.T) {
-	// Skip - zip extraction requires a proper zip file which we can't easily create
-	// without an external library
-	t.Skip("zip extraction test skipped - requires external zip library")
+	tmpDir := t.TempDir()
+	archivePath := filepath.Join(tmpDir, "test.zip")
+	extractDir := filepath.Join(tmpDir, "extracted")
+
+	files := map[string]string{
+		"bin/tool.exe": "echo hello",
+		"README":       "readme content",
+	}
+	createZipArchive(t, archivePath, files)
+
+	filesList, err := extractZip(archivePath, extractDir)
+	if err != nil {
+		t.Fatalf("failed to extract zip: %v", err)
+	}
+	if len(filesList) != 2 {
+		t.Fatalf("expected 2 files, got %d", len(filesList))
+	}
+	for name, content := range files {
+		data, err := os.ReadFile(filepath.Join(extractDir, name))
+		if err != nil {
+			t.Fatalf("failed to read extracted file %s: %v", name, err)
+		}
+		if string(data) != content {
+			t.Fatalf("content mismatch for %s: got %q want %q", name, string(data), content)
+		}
+	}
 }
 
 func TestExtractTarXz(t *testing.T) {
@@ -176,6 +200,97 @@ func TestExtractTarGzSecurity(t *testing.T) {
 	_, err := extractTarGz(archivePath, extractDir)
 	if err == nil {
 		t.Error("expected error for path traversal attack")
+	}
+}
+
+func TestDownloadAndExtractWithCacheTarGz(t *testing.T) {
+	tmpDir := t.TempDir()
+	oldHome := os.Getenv("HOME")
+	os.Setenv("HOME", tmpDir)
+	t.Cleanup(func() { os.Setenv("HOME", oldHome) })
+
+	archivePath := filepath.Join(tmpDir, "tool.tar.gz")
+	createTarGz(t, archivePath, map[string]string{"tool": "binary"})
+	payload, err := os.ReadFile(archivePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write(payload)
+	}))
+	defer server.Close()
+
+	result, err := DownloadAndExtractWithCache(&github.AssetInfo{
+		Name:        "tool.tar.gz",
+		DownloadURL: server.URL,
+	}, runtimeGOOS(), runtimeGOARCH(), "owner/repo", "v1.0.0")
+	if err != nil {
+		t.Fatalf("DownloadAndExtractWithCache failed: %v", err)
+	}
+	defer os.RemoveAll(result.TempDir)
+
+	if !result.IsBinary || len(result.Files) != 1 || result.Files[0] != "tool" {
+		t.Fatalf("unexpected result: %+v", result)
+	}
+	if _, err := os.Stat(filepath.Join(result.TempDir, "tool")); err != nil {
+		t.Fatalf("expected extracted tool: %v", err)
+	}
+}
+
+func TestDownloadAndExtractWithCacheZipAndSingleExe(t *testing.T) {
+	tmpDir := t.TempDir()
+	zipPath := filepath.Join(tmpDir, "tool.zip")
+	createZipArchive(t, zipPath, map[string]string{"tool.exe": "binary"})
+	zipPayload, err := os.ReadFile(zipPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/zip":
+			_, _ = w.Write(zipPayload)
+		case "/exe":
+			_, _ = w.Write([]byte("exe payload"))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer server.Close()
+
+	zipResult, err := DownloadAndExtractWithCache(&github.AssetInfo{Name: "tool.zip", DownloadURL: server.URL + "/zip"}, "windows", "amd64", "", "")
+	if err != nil {
+		t.Fatalf("zip download failed: %v", err)
+	}
+	defer os.RemoveAll(zipResult.TempDir)
+	if len(zipResult.Files) != 1 || zipResult.Files[0] != "tool.exe" {
+		t.Fatalf("unexpected zip files: %+v", zipResult.Files)
+	}
+
+	exeResult, err := DownloadAndExtractWithCache(&github.AssetInfo{Name: "tool.exe", DownloadURL: server.URL + "/exe"}, "windows", "amd64", "", "")
+	if err != nil {
+		t.Fatalf("exe download failed: %v", err)
+	}
+	defer os.RemoveAll(exeResult.TempDir)
+	if len(exeResult.Files) != 1 || exeResult.Files[0] != "tool.exe" {
+		t.Fatalf("unexpected exe files: %+v", exeResult.Files)
+	}
+}
+
+func TestVerifyChecksumWithAssetDigest(t *testing.T) {
+	tmpDir := t.TempDir()
+	path := filepath.Join(tmpDir, "payload.bin")
+	if err := os.WriteFile(path, []byte("payload"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	sum, err := ComputeSHA256(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	SetAssetDigest("sha256:" + sum)
+	defer ClearAssetDigest()
+	if err := verifyChecksumIfAvailable(path, "payload.bin"); err != nil {
+		t.Fatalf("expected checksum verification success: %v", err)
 	}
 }
 
@@ -257,6 +372,34 @@ func createZip(t *testing.T, path string, files map[string]string) {
 			t.Fatalf("failed to write file: %v", err)
 		}
 	}
+}
+
+func createZipArchive(t *testing.T, path string, files map[string]string) {
+	t.Helper()
+	out, err := os.Create(path)
+	if err != nil {
+		t.Fatalf("failed to create zip: %v", err)
+	}
+	defer out.Close()
+	zw := zip.NewWriter(out)
+	defer zw.Close()
+	for name, content := range files {
+		w, err := zw.Create(name)
+		if err != nil {
+			t.Fatalf("failed to create zip entry: %v", err)
+		}
+		if _, err := w.Write([]byte(content)); err != nil {
+			t.Fatalf("failed to write zip entry: %v", err)
+		}
+	}
+}
+
+func runtimeGOOS() string {
+	return "linux"
+}
+
+func runtimeGOARCH() string {
+	return "amd64"
 }
 
 func hasZipCommand() bool {

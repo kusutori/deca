@@ -9,10 +9,10 @@ import (
 )
 
 func TestCacheGetPath(t *testing.T) {
-	c := &Cache{RootDir: "/tmp/test-cache"}
+	c := &Cache{RootDir: filepath.Join(string(filepath.Separator), "tmp", "test-cache")}
 
 	path := c.GetPath("owner/repo", "v1.0.0", "file.tar.gz")
-	expected := "/tmp/test-cache/owner-repo/v1.0.0/file.tar.gz"
+	expected := filepath.Join(string(filepath.Separator), "tmp", "test-cache", "owner-repo", "v1.0.0", "file.tar.gz")
 
 	if path != expected {
 		t.Errorf("expected %s, got %s", expected, path)
@@ -237,7 +237,8 @@ func TestCacheListEntries(t *testing.T) {
 func TestCacheNewCache(t *testing.T) {
 	// Set a custom home for testing
 	oldHome := os.Getenv("HOME")
-	os.Setenv("HOME", "/tmp/test-home")
+	testHome := filepath.Join(string(filepath.Separator), "tmp", "test-home")
+	os.Setenv("HOME", testHome)
 	defer os.Setenv("HOME", oldHome)
 
 	// Clear XDG_CACHE_HOME
@@ -246,7 +247,7 @@ func TestCacheNewCache(t *testing.T) {
 	defer os.Setenv("XDG_CACHE_HOME", oldXDG)
 
 	c := NewCache()
-	expected := "/tmp/test-home/.cache/deca"
+	expected := filepath.Join(testHome, ".cache", "deca")
 
 	if c.RootDir != expected {
 		t.Errorf("expected %s, got %s", expected, c.RootDir)
@@ -257,8 +258,10 @@ func TestCacheWithXDG(t *testing.T) {
 	oldHome := os.Getenv("HOME")
 	oldXDG := os.Getenv("XDG_CACHE_HOME")
 
-	os.Setenv("HOME", "/tmp/test-home")
-	os.Setenv("XDG_CACHE_HOME", "/custom/cache")
+	testHome := filepath.Join(string(filepath.Separator), "tmp", "test-home")
+	xdgCache := filepath.Join(string(filepath.Separator), "custom", "cache")
+	os.Setenv("HOME", testHome)
+	os.Setenv("XDG_CACHE_HOME", xdgCache)
 
 	defer func() {
 		os.Setenv("HOME", oldHome)
@@ -270,7 +273,7 @@ func TestCacheWithXDG(t *testing.T) {
 	}()
 
 	c := NewCache()
-	expected := "/custom/cache/deca"
+	expected := filepath.Join(xdgCache, "deca")
 
 	if c.RootDir != expected {
 		t.Errorf("expected %s, got %s", expected, c.RootDir)
@@ -281,7 +284,8 @@ func TestCacheNewCacheDefault(t *testing.T) {
 	oldHome := os.Getenv("HOME")
 	oldXDG := os.Getenv("XDG_CACHE_HOME")
 
-	os.Setenv("HOME", "/tmp/test-home")
+	testHome := filepath.Join(string(filepath.Separator), "tmp", "test-home")
+	os.Setenv("HOME", testHome)
 	os.Unsetenv("XDG_CACHE_HOME")
 
 	defer func() {
@@ -292,7 +296,7 @@ func TestCacheNewCacheDefault(t *testing.T) {
 	}()
 
 	c := NewCache()
-	expected := "/tmp/test-home/.cache/deca"
+	expected := filepath.Join(testHome, ".cache", "deca")
 
 	if c.RootDir != expected {
 		t.Errorf("expected %s, got %s", expected, c.RootDir)
@@ -328,5 +332,46 @@ func TestCacheGetPath_BoundaryInputs(t *testing.T) {
 	p := c.GetPath("", "", "../../"+long+".tar.gz")
 	if filepath.Base(p) != long+".tar.gz" {
 		t.Fatalf("expected sanitized basename, got %s", p)
+	}
+}
+
+func TestCacheCleanOrphansAndEnsureDir(t *testing.T) {
+	tmpDir := t.TempDir()
+	c := &Cache{RootDir: filepath.Join(tmpDir, "cache")}
+	if err := c.EnsureDir(); err != nil {
+		t.Fatalf("EnsureDir failed: %v", err)
+	}
+	if _, err := os.Stat(c.RootDir); err != nil {
+		t.Fatalf("cache dir missing: %v", err)
+	}
+
+	keepDir := filepath.Join(c.RootDir, "owner-repo", "v1.0.0")
+	removeDir := filepath.Join(c.RootDir, "owner-repo", "v2.0.0")
+	if err := os.MkdirAll(keepDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(removeDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	keepPath := filepath.Join(keepDir, "keep.tar.gz")
+	removePath := filepath.Join(removeDir, "remove.tar.gz")
+	if err := os.WriteFile(keepPath, []byte("keep"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(removePath, []byte("remove"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	statePackages := map[string]struct{}{
+		"owner/repo/v1.0.0/keep.tar.gz": {},
+	}
+	if err := c.CleanOrphans(statePackages); err != nil {
+		t.Fatalf("CleanOrphans failed: %v", err)
+	}
+	if _, err := os.Stat(keepPath); err != nil {
+		t.Fatalf("expected referenced cache file to remain: %v", err)
+	}
+	if _, err := os.Stat(removePath); !os.IsNotExist(err) {
+		t.Fatalf("expected orphan cache file removed, got %v", err)
 	}
 }
