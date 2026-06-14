@@ -123,6 +123,34 @@ func TestAssetSelectionNonTerminal(t *testing.T) {
 	}
 }
 
+func TestPrintAssetTableSelections(t *testing.T) {
+	oldStdin := os.Stdin
+	r, w, err := os.Pipe()
+	if err != nil {
+		t.Fatalf("pipe: %v", err)
+	}
+	os.Stdin = r
+	t.Cleanup(func() { os.Stdin = oldStdin })
+
+	if _, err := w.WriteString("2\n"); err != nil {
+		t.Fatal(err)
+	}
+	_ = w.Close()
+
+	assets := []github.AssetInfo{
+		{Name: "one", Size: 512},
+		{Name: strings.Repeat("two", 30), Size: 2048},
+	}
+	out := captureUIOutput(t, func() {
+		if idx := PrintAssetTable(assets, "owner/repo"); idx != 1 {
+			t.Fatalf("expected selected index 1, got %d", idx)
+		}
+	})
+	if !strings.Contains(out, "Available assets") || !strings.Contains(out, "2.0 KB") {
+		t.Fatalf("unexpected asset table output:\n%s", out)
+	}
+}
+
 func captureUIOutput(t *testing.T, fn func()) string {
 	t.Helper()
 	oldStdout := os.Stdout

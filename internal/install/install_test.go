@@ -1,10 +1,14 @@
 package install
 
 import (
+	"archive/tar"
+	"bytes"
+	"compress/gzip"
 	"errors"
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -51,6 +55,9 @@ func TestBinDirInPATH(t *testing.T) {
 }
 
 func TestUninstall(t *testing.T) {
+	restoreRuntime := mockRuntime("linux", "amd64")
+	defer restoreRuntime()
+
 	tmpDir := t.TempDir()
 	binDir := filepath.Join(tmpDir, "bin")
 	installer := NewInstaller(binDir)
@@ -78,6 +85,9 @@ func TestUninstall(t *testing.T) {
 }
 
 func TestUninstallNotExists(t *testing.T) {
+	restoreRuntime := mockRuntime("linux", "amd64")
+	defer restoreRuntime()
+
 	tmpDir := t.TempDir()
 	binDir := filepath.Join(tmpDir, "bin")
 	installer := NewInstaller(binDir)
@@ -159,6 +169,10 @@ func TestAddToPATHInstructions(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.shell, func(t *testing.T) {
+			origShell := os.Getenv("SHELL")
+			os.Setenv("SHELL", "/bin/"+tt.shell)
+			t.Cleanup(func() { os.Setenv("SHELL", origShell) })
+
 			installer := NewInstaller(tt.binDir)
 			instructions := installer.AddToPATHInstructions()
 
@@ -166,6 +180,8 @@ func TestAddToPATHInstructions(t *testing.T) {
 				if instructions == "" {
 					t.Error("expected non-empty instructions")
 				}
+			} else if !strings.Contains(instructions, tt.binDir) {
+				t.Fatalf("expected fallback instructions to include bin dir, got %q", instructions)
 			}
 		})
 	}
@@ -244,6 +260,111 @@ func TestInstall_CreatesBinDir(t *testing.T) {
 	// Verify bin dir was created
 	if _, err := os.Stat(binDir); err != nil {
 		t.Errorf("bin dir should have been created: %v", err)
+	}
+}
+
+func TestInstall_CreateBinDirFailure(t *testing.T) {
+	tmpDir := t.TempDir()
+	binFile := filepath.Join(tmpDir, "bin")
+	if err := os.WriteFile(binFile, []byte("not a dir"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	installer := NewInstaller(filepath.Join(binFile, "child"))
+	release := &github.ReleaseInfo{TagName: "v1.0.0", Owner: "owner", Repo: "repo"}
+	asset := &github.AssetInfo{Name: "tool.tar.gz", DownloadURL: "http://example.com/tool.tar.gz"}
+	if _, err := installer.Install("tool", release, asset); err == nil {
+		t.Fatal("expected bin dir creation failure")
+	}
+}
+
+func TestInstallRegularBinaryArchive(t *testing.T) {
+	restoreRuntime := mockRuntime("linux", "amd64")
+	defer restoreRuntime()
+
+	tests := []struct {
+		name        string
+		files       map[string]tarTestFile
+		wantContent string
+	}{
+		{
+			name: "finds named executable",
+			files: map[string]tarTestFile{
+				"tool":      {content: "named executable", mode: 0755},
+				"README.md": {content: "readme", mode: 0644},
+			},
+			wantContent: "named executable",
+		},
+		{
+			name: "falls back to first regular file",
+			files: map[string]tarTestFile{
+				"README.md": {content: "regular file", mode: 0644},
+			},
+			wantContent: "regular file",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			payload := tarGzInstallBytes(t, tt.files)
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				_, _ = w.Write(payload)
+			}))
+			defer server.Close()
+
+			tmpDir := t.TempDir()
+			oldHome := os.Getenv("HOME")
+			os.Setenv("HOME", tmpDir)
+			t.Cleanup(func() { os.Setenv("HOME", oldHome) })
+
+			installer := NewInstaller(filepath.Join(tmpDir, "bin"))
+			release := &github.ReleaseInfo{TagName: "v1.0.0", Owner: "owner", Repo: "repo"}
+			asset := &github.AssetInfo{Name: "tool-linux-amd64.tar.gz", DownloadURL: server.URL}
+
+			result, err := installer.Install("tool", release, asset)
+			if err != nil {
+				t.Fatalf("Install failed: %v", err)
+			}
+			if result.InstallType != config.InstallTypeBinary || result.BinaryPath == "" || result.ExposedPath != result.BinaryPath {
+				t.Fatalf("unexpected result: %+v", result)
+			}
+			data, err := os.ReadFile(result.BinaryPath)
+			if err != nil {
+				t.Fatalf("failed to read installed binary: %v", err)
+			}
+			if string(data) != tt.wantContent {
+				t.Fatalf("content mismatch: got %q want %q", string(data), tt.wantContent)
+			}
+		})
+	}
+}
+
+func TestInstallRegularSingleFile(t *testing.T) {
+	restoreRuntime := mockRuntime("linux", "amd64")
+	defer restoreRuntime()
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte("single binary"))
+	}))
+	defer server.Close()
+
+	tmpDir := t.TempDir()
+	oldHome := os.Getenv("HOME")
+	os.Setenv("HOME", tmpDir)
+	t.Cleanup(func() { os.Setenv("HOME", oldHome) })
+
+	installer := NewInstaller(filepath.Join(tmpDir, "bin"))
+	release := &github.ReleaseInfo{TagName: "v1.0.0", Owner: "owner", Repo: "repo"}
+	asset := &github.AssetInfo{Name: "tool", DownloadURL: server.URL}
+	result, err := installer.Install("tool", release, asset)
+	if err != nil {
+		t.Fatalf("Install single file failed: %v", err)
+	}
+	data, err := os.ReadFile(result.BinaryPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(data) != "single binary" {
+		t.Fatalf("unexpected installed content: %q", string(data))
 	}
 }
 
@@ -446,6 +567,18 @@ func TestVersionedSymlinkAndRollbackHelpers(t *testing.T) {
 	if err := RemoveBackup(backup); err != nil {
 		t.Fatalf("RemoveBackup failed: %v", err)
 	}
+
+	if _, err := CreateVersionedSymlink(binDir, "missing", "v1.0.0", filepath.Join(binDir, "missing")); err == nil {
+		t.Fatal("expected missing current binary error")
+	}
+
+	badVersioned := filepath.Join(tmpDir, "dir-versioned")
+	if err := os.MkdirAll(filepath.Join(badVersioned, "child"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := UninstallVersioned("", badVersioned); err == nil {
+		t.Fatal("expected remove non-empty directory error")
+	}
 }
 
 func TestDetectPackageTypeAllKnownTypes(t *testing.T) {
@@ -529,14 +662,15 @@ func TestExtractDebPackageName(t *testing.T) {
 				t.Fatalf("failed to create test file: %v", err)
 			}
 
-			// The actual extractDebPackageName uses dpkg-deb which may not be available
-			// So we test the fallback parsing by simulating the logic
-			parts := strings.Split(tc.filename, "_")
-			if len(parts) > 0 {
-				got := parts[0]
-				if got != tc.expectedName {
-					t.Errorf("expected %s, got %s", tc.expectedName, got)
-				}
+			restore := mockInstallExec(t)
+			// Force dpkg-deb failure so extractDebPackageName exercises filename fallback.
+			execCommandFunc = func(string, ...string) *exec.Cmd {
+				return fakeInstallCommand("fail")
+			}
+			got := extractDebPackageName(debPath)
+			restore()
+			if got != tc.expectedName {
+				t.Errorf("expected %s, got %s", tc.expectedName, got)
 			}
 		})
 	}
@@ -587,6 +721,27 @@ func TestInstallAppImage_UsesDownloadFile(t *testing.T) {
 	}
 }
 
+func TestInstallAppImageCopyFailure(t *testing.T) {
+	tmpDir := t.TempDir()
+	binFile := filepath.Join(tmpDir, "bin-file")
+	if err := os.WriteFile(binFile, []byte("not a dir"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	installer := NewInstaller(binFile)
+
+	orig := downloadFileFunc
+	t.Cleanup(func() { downloadFileFunc = orig })
+	downloadFileFunc = func(url, path string) error {
+		return os.WriteFile(path, []byte("appimage"), 0755)
+	}
+
+	release := &github.ReleaseInfo{TagName: "v1.0.0", Owner: "o", Repo: "r"}
+	asset := &github.AssetInfo{Name: "tool.AppImage", DownloadURL: "http://example.com/tool.AppImage"}
+	if _, err := installer.installAppImage("tool", release, asset, binFile); err == nil {
+		t.Fatal("expected AppImage copy failure")
+	}
+}
+
 func TestInstallSystemPackage_UsesDownloadFile(t *testing.T) {
 	tmpDir := t.TempDir()
 	installer := NewInstaller(tmpDir)
@@ -611,6 +766,322 @@ func TestInstallSystemPackage_UsesDownloadFile(t *testing.T) {
 	_, err := installer.installSystemPackage("tool", release, asset, "deb", "/tmp")
 	if !errors.Is(err, sentinel) {
 		t.Fatalf("expected download error, got %v", err)
+	}
+}
+
+func TestInstallSystemPackageSuccessAndUnsupported(t *testing.T) {
+	tmpDir := t.TempDir()
+	installer := NewInstaller(tmpDir)
+	restore := mockInstallExec(t)
+	defer restore()
+
+	origDownload := downloadFileFunc
+	downloadFileFunc = func(url, path string) error {
+		return os.WriteFile(path, []byte("package"), 0644)
+	}
+	t.Cleanup(func() { downloadFileFunc = origDownload })
+
+	release := &github.ReleaseInfo{TagName: "v1.0.0", Owner: "owner", Repo: "repo"}
+	deb := &github.AssetInfo{Name: "tool_1.0.0_amd64.deb", DownloadURL: "http://example.com/tool.deb"}
+	result, err := installer.installSystemPackage("tool", release, deb, "deb", tmpDir)
+	if err != nil {
+		t.Fatalf("installSystemPackage deb failed: %v", err)
+	}
+	if result.InstallType != config.InstallTypeSystem || result.SystemPkgName != "pkg-from-dpkg" {
+		t.Fatalf("unexpected result: %+v", result)
+	}
+	if _, err := os.Stat(filepath.Join(tmpDir, deb.Name)); !os.IsNotExist(err) {
+		t.Fatalf("expected package file cleaned up, got %v", err)
+	}
+
+	rpm := &github.AssetInfo{Name: "tool.rpm", DownloadURL: "http://example.com/tool.rpm"}
+	result, err = installer.installSystemPackage("tool", release, rpm, "rpm", tmpDir)
+	if err != nil {
+		t.Fatalf("installSystemPackage rpm failed: %v", err)
+	}
+	if result.SystemPkgName != "tool" {
+		t.Fatalf("expected rpm package name fallback, got %+v", result)
+	}
+
+	if _, err := installer.installSystemPackage("tool", release, deb, "apk", tmpDir); err == nil {
+		t.Fatal("expected unsupported package type error")
+	}
+}
+
+func TestInstallSystemPackageNonRootAndYumFallback(t *testing.T) {
+	tmpDir := t.TempDir()
+	installer := NewInstaller(tmpDir)
+	restore := mockInstallExec(t)
+	defer restore()
+
+	getuidFunc = func() int { return 1000 }
+	execLookPathFunc = func(name string) (string, error) {
+		switch name {
+		case "dnf":
+			return "", os.ErrNotExist
+		case "yum", "sudo":
+			return name, nil
+		default:
+			return "", os.ErrNotExist
+		}
+	}
+	origDownload := downloadFileFunc
+	downloadFileFunc = func(url, path string) error {
+		return os.WriteFile(path, []byte("package"), 0644)
+	}
+	t.Cleanup(func() { downloadFileFunc = origDownload })
+
+	release := &github.ReleaseInfo{TagName: "v1.0.0", Owner: "owner", Repo: "repo"}
+	asset := &github.AssetInfo{Name: "tool.rpm", DownloadURL: "http://example.com/tool.rpm"}
+	if _, err := installer.installSystemPackage("tool", release, asset, "rpm", tmpDir); err != nil {
+		t.Fatalf("non-root rpm install failed: %v", err)
+	}
+}
+
+func TestUninstallSystemPackageBranches(t *testing.T) {
+	installer := NewInstaller(t.TempDir())
+	restore := mockInstallExec(t)
+	defer restore()
+
+	if err := installer.uninstallSystemPackage("tool", "system-tool"); err != nil {
+		t.Fatalf("uninstall system package failed: %v", err)
+	}
+
+	getuidFunc = func() int { return 1000 }
+	if err := installer.uninstallSystemPackage("tool", "system-tool"); err != nil {
+		t.Fatalf("non-root uninstall system package failed: %v", err)
+	}
+	getuidFunc = func() int { return 0 }
+
+	origLookPath := execLookPathFunc
+	execLookPathFunc = func(string) (string, error) { return "", os.ErrNotExist }
+	if err := installer.uninstallSystemPackage("tool", ""); err == nil {
+		t.Fatal("expected no package manager error")
+	}
+	execLookPathFunc = origLookPath
+}
+
+func TestUninstallDispatchForWindowsTypes(t *testing.T) {
+	if runtime.GOOS != "windows" {
+		t.Skip("windows uninstall dispatch is only active on Windows")
+	}
+	installer := NewInstaller(t.TempDir())
+	restore := mockInstallExec(t)
+	defer restore()
+
+	if err := installer.Uninstall("tool", config.InstallTypeWindowsMSI, "", UninstallMetadata{ProductCode: "{PRODUCT-CODE}"}); err != nil {
+		t.Fatalf("windows MSI uninstall dispatch failed: %v", err)
+	}
+	if err := installer.Uninstall("tool", config.InstallTypeWindowsInstaller, ""); err != nil {
+		t.Fatalf("windows installer uninstall dispatch failed: %v", err)
+	}
+}
+
+func TestSudoRunRootAndCached(t *testing.T) {
+	restore := mockInstallExec(t)
+	defer restore()
+
+	if err := SudoRun("echo", "ok"); err != nil {
+		t.Fatalf("root SudoRun failed: %v", err)
+	}
+
+	getuidFunc = func() int { return 1000 }
+	if err := SudoRun("echo", "ok"); err != nil {
+		t.Fatalf("cached SudoRun failed: %v", err)
+	}
+
+	execLookPathFunc = func(string) (string, error) { return "", os.ErrNotExist }
+	if err := SudoRun("echo", "ok"); err == nil {
+		t.Fatal("expected sudo missing error")
+	}
+}
+
+func TestSudoRunPasswordPromptBranch(t *testing.T) {
+	restore := mockInstallExec(t)
+	defer restore()
+
+	getuidFunc = func() int { return 1000 }
+	execCommandFunc = func(command string, args ...string) *exec.Cmd {
+		if command == "sudo" && len(args) >= 2 && args[0] == "-n" && args[1] == "true" {
+			return fakeInstallCommand("fail")
+		}
+		return fakeInstallCommand(command, args...)
+	}
+	origReadPassword := termReadPasswordFunc
+	termReadPasswordFunc = func(int) ([]byte, error) { return []byte("password"), nil }
+	defer func() { termReadPasswordFunc = origReadPassword }()
+
+	if err := SudoRun("echo", "ok"); err != nil {
+		t.Fatalf("password prompt SudoRun failed: %v", err)
+	}
+}
+
+func TestInstallWindowsMSIAndInstaller(t *testing.T) {
+	if runtime.GOOS != "windows" {
+		t.Skip("windows installer paths are only active on Windows")
+	}
+	tmpDir := t.TempDir()
+	oldHome := os.Getenv("HOME")
+	oldLocalAppData := os.Getenv("LOCALAPPDATA")
+	os.Setenv("HOME", tmpDir)
+	os.Setenv("LOCALAPPDATA", tmpDir)
+	t.Cleanup(func() {
+		os.Setenv("HOME", oldHome)
+		os.Setenv("LOCALAPPDATA", oldLocalAppData)
+	})
+	restore := mockInstallExec(t)
+	defer restore()
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte("installer"))
+	}))
+	defer server.Close()
+
+	installer := NewInstaller(filepath.Join(tmpDir, "bin"))
+	release := &github.ReleaseInfo{TagName: "v1.0.0", Owner: "owner", Repo: "repo"}
+	msiResult, err := installer.Install("tool", release, &github.AssetInfo{Name: "tool.msi", DownloadURL: server.URL})
+	if err != nil {
+		t.Fatalf("MSI install failed: %v", err)
+	}
+	if msiResult.InstallType != config.InstallTypeWindowsMSI || msiResult.ProductCode == "" {
+		t.Fatalf("unexpected MSI result: %+v", msiResult)
+	}
+
+	installerResult, err := installer.Install("tool", release, &github.AssetInfo{Name: "setup.exe", DownloadURL: server.URL}, "installer")
+	if err != nil {
+		t.Fatalf("interactive installer failed: %v", err)
+	}
+	if installerResult.InstallType != config.InstallTypeWindowsInstaller {
+		t.Fatalf("unexpected installer result: %+v", installerResult)
+	}
+	if err := installer.uninstallWindowsMSI("tool", "{PRODUCT-CODE}"); err != nil {
+		t.Fatalf("MSI uninstall failed: %v", err)
+	}
+	if err := installer.uninstallWindowsInstaller("tool"); err != nil {
+		t.Fatalf("installer uninstall state cleanup failed: %v", err)
+	}
+	if err := installer.uninstallWindowsMSI("tool", ""); err == nil {
+		t.Fatal("expected missing product code error")
+	}
+}
+
+func TestWindowsInstallerErrorBranches(t *testing.T) {
+	if runtime.GOOS != "windows" {
+		t.Skip("windows installer paths are only active on Windows")
+	}
+	tmpDir := t.TempDir()
+	oldHome := os.Getenv("HOME")
+	oldLocalAppData := os.Getenv("LOCALAPPDATA")
+	os.Setenv("HOME", tmpDir)
+	os.Setenv("LOCALAPPDATA", tmpDir)
+	t.Cleanup(func() {
+		os.Setenv("HOME", oldHome)
+		os.Setenv("LOCALAPPDATA", oldLocalAppData)
+	})
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte("payload"))
+	}))
+	defer server.Close()
+
+	installer := NewInstaller(filepath.Join(tmpDir, "bin"))
+	release := &github.ReleaseInfo{TagName: "v1.0.0", Owner: "owner", Repo: "repo"}
+
+	restore := mockInstallExec(t)
+	execCommandFunc = func(command string, args ...string) *exec.Cmd {
+		if command == "powershell.exe" {
+			return fakeInstallCommand("fail")
+		}
+		return fakeInstallCommand(command, args...)
+	}
+	if _, err := installer.Install("tool", release, &github.AssetInfo{Name: "tool.msi", DownloadURL: server.URL}); err == nil {
+		t.Fatal("expected MSI product code read failure")
+	}
+	restore()
+
+	restore = mockInstallExec(t)
+	execCommandFunc = func(command string, args ...string) *exec.Cmd {
+		if strings.HasSuffix(strings.ToLower(command), ".exe") {
+			return fakeInstallCommand("fail")
+		}
+		return fakeInstallCommand(command, args...)
+	}
+	if _, err := installer.Install("tool", release, &github.AssetInfo{Name: "setup.exe", DownloadURL: server.URL}, "installer"); err == nil {
+		t.Fatal("expected interactive installer failure")
+	}
+	restore()
+
+	if _, err := installer.Install("tool", release, &github.AssetInfo{Name: "readme.txt", DownloadURL: server.URL}); err == nil {
+		t.Fatal("expected no executable found error")
+	}
+}
+
+func TestCopyFileErrorBranches(t *testing.T) {
+	tmpDir := t.TempDir()
+	if err := copyFile(filepath.Join(tmpDir, "missing"), filepath.Join(tmpDir, "dst")); err == nil {
+		t.Fatal("expected missing source error")
+	}
+
+	src := filepath.Join(tmpDir, "src")
+	if err := os.WriteFile(src, []byte("data"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := copyFile(src, tmpDir); err == nil {
+		t.Fatal("expected create destination error")
+	}
+}
+
+func TestWindowsHelperEdgeBranches(t *testing.T) {
+	if runtime.GOOS != "windows" {
+		t.Skip("windows helper branch coverage is only meaningful on Windows")
+	}
+	oldLocalAppData := os.Getenv("LOCALAPPDATA")
+	os.Unsetenv("LOCALAPPDATA")
+	t.Cleanup(func() { os.Setenv("LOCALAPPDATA", oldLocalAppData) })
+	if root := WindowsInstallRoot("", ""); !strings.Contains(root, filepath.Join("deca", "packages", "_", "_")) {
+		t.Fatalf("unexpected fallback root: %s", root)
+	}
+	if got := firstWindowsExecutable([]string{"README.md"}); got != "" {
+		t.Fatalf("expected no executable, got %q", got)
+	}
+
+	srcRoot := t.TempDir()
+	dstRoot := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(srcRoot, "docs"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := copyExtractedFiles(srcRoot, dstRoot, []string{"docs"}); err != nil {
+		t.Fatalf("copy directory entry failed: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(dstRoot, "docs")); err != nil {
+		t.Fatalf("expected copied directory: %v", err)
+	}
+
+	installer := NewInstaller(t.TempDir())
+	if err := installer.uninstallWindowsPortable("missing", UninstallMetadata{}); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("expected not exist for missing portable uninstall, got %v", err)
+	}
+
+	if _, err := exposeWindowsExecutable(filepath.Join(t.TempDir(), "missing.exe"), filepath.Join(t.TempDir(), "bin", "tool.exe")); err == nil {
+		t.Fatal("expected expose missing target error")
+	}
+}
+
+func TestUninstallBinaryWindowsNoExtensionFallback(t *testing.T) {
+	restoreRuntime := mockRuntime("windows", "amd64")
+	defer restoreRuntime()
+
+	tmpDir := t.TempDir()
+	installer := NewInstaller(tmpDir)
+	pathNoExt := filepath.Join(tmpDir, "tool")
+	if err := os.WriteFile(pathNoExt, []byte("exe"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := installer.uninstallBinary("tool"); err != nil {
+		t.Fatalf("expected no-extension fallback removal: %v", err)
+	}
+	if _, err := os.Stat(pathNoExt); !os.IsNotExist(err) {
+		t.Fatalf("expected no-extension binary removed, got %v", err)
 	}
 }
 
@@ -667,4 +1138,105 @@ func TestInstallAppImage_DownloadFailureUsesErrorsIs(t *testing.T) {
 	if !errors.Is(err, os.ErrPermission) {
 		t.Fatalf("expected wrapped permission error, got %v", err)
 	}
+}
+
+func mockInstallExec(t *testing.T) func() {
+	t.Helper()
+	origCommand := execCommandFunc
+	origLookPath := execLookPathFunc
+	origGetuid := getuidFunc
+	execCommandFunc = fakeInstallCommand
+	execLookPathFunc = func(name string) (string, error) {
+		switch name {
+		case "dnf", "yum", "apt", "sudo":
+			return name, nil
+		default:
+			return "", os.ErrNotExist
+		}
+	}
+	getuidFunc = func() int { return 0 }
+	return func() {
+		execCommandFunc = origCommand
+		execLookPathFunc = origLookPath
+		getuidFunc = origGetuid
+	}
+}
+
+func fakeInstallCommand(command string, args ...string) *exec.Cmd {
+	allArgs := append([]string{"-test.run=TestInstallHelperProcess", "--", command}, args...)
+	cmd := exec.Command(os.Args[0], allArgs...)
+	cmd.Env = append(os.Environ(), "GO_WANT_INSTALL_HELPER_PROCESS=1")
+	return cmd
+}
+
+func TestInstallHelperProcess(t *testing.T) {
+	if os.Getenv("GO_WANT_INSTALL_HELPER_PROCESS") != "1" {
+		return
+	}
+	args := os.Args
+	sep := 0
+	for i, arg := range args {
+		if arg == "--" {
+			sep = i
+			break
+		}
+	}
+	if sep == 0 || sep+1 >= len(args) {
+		os.Exit(2)
+	}
+	command := args[sep+1]
+	switch command {
+	case "fail":
+		os.Exit(1)
+	case "dpkg-deb":
+		_, _ = os.Stdout.WriteString("pkg-from-dpkg\n")
+	case "sudo", "apt", "dnf", "yum", "msiexec", "echo":
+	case "powershell.exe":
+		_, _ = os.Stdout.WriteString("{PRODUCT-CODE}\n")
+	default:
+		// Treat downloaded interactive installer paths as successful commands.
+	}
+	os.Exit(0)
+}
+
+func mockRuntime(goos, goarch string) func() {
+	origGOOS := runtimeGOOS
+	origGOARCH := runtimeGOARCH
+	runtimeGOOS = goos
+	runtimeGOARCH = goarch
+	return func() {
+		runtimeGOOS = origGOOS
+		runtimeGOARCH = origGOARCH
+	}
+}
+
+type tarTestFile struct {
+	content string
+	mode    int64
+}
+
+func tarGzInstallBytes(t *testing.T, files map[string]tarTestFile) []byte {
+	t.Helper()
+	var buf bytes.Buffer
+	gw := gzip.NewWriter(&buf)
+	tw := tar.NewWriter(gw)
+	for name, file := range files {
+		if err := tw.WriteHeader(&tar.Header{
+			Name: name,
+			Mode: file.mode,
+			Size: int64(len(file.content)),
+		}); err != nil {
+			t.Fatalf("write tar header: %v", err)
+		}
+		if _, err := tw.Write([]byte(file.content)); err != nil {
+			t.Fatalf("write tar content: %v", err)
+		}
+	}
+	if err := tw.Close(); err != nil {
+		t.Fatalf("close tar: %v", err)
+	}
+	if err := gw.Close(); err != nil {
+		t.Fatalf("close gzip: %v", err)
+	}
+	return buf.Bytes()
 }

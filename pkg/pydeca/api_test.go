@@ -140,3 +140,21 @@ eza = "eza-community/eza"
 		t.Fatalf("client InjectSchema failed: %v", err)
 	}
 }
+
+func TestClientRun(t *testing.T) {
+	dir := t.TempDir()
+	cfgPath := filepath.Join(dir, "deca.toml")
+	client := NewClient(cfgPath)
+
+	if code := client.Run([]string{"--help"}); code != 0 {
+		t.Fatalf("expected help to exit 0, got %d", code)
+	}
+	if code := client.Run([]string{"not-a-command"}); code == 0 {
+		t.Fatal("expected invalid command to fail")
+	}
+
+	noConfigClient := &Client{}
+	if code := noConfigClient.Run([]string{"--version"}); code != 0 {
+		t.Fatalf("expected version to exit 0, got %d", code)
+	}
+}

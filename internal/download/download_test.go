@@ -10,6 +10,8 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"runtime"
+	"strings"
 	"testing"
 
 	"github.com/kusutori/deca/internal/github"
@@ -274,6 +276,147 @@ func TestDownloadAndExtractWithCacheZipAndSingleExe(t *testing.T) {
 	defer os.RemoveAll(exeResult.TempDir)
 	if len(exeResult.Files) != 1 || exeResult.Files[0] != "tool.exe" {
 		t.Fatalf("unexpected exe files: %+v", exeResult.Files)
+	}
+}
+
+func TestCopyFileAndDownloadAndExtractNoCache(t *testing.T) {
+	tmpDir := t.TempDir()
+	src := filepath.Join(tmpDir, "src.bin")
+	dst := filepath.Join(tmpDir, "dst.bin")
+	if err := os.WriteFile(src, []byte("copy payload"), 0750); err != nil {
+		t.Fatal(err)
+	}
+	if err := copyFile(src, dst); err != nil {
+		t.Fatalf("copyFile failed: %v", err)
+	}
+	data, err := os.ReadFile(dst)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(data) != "copy payload" {
+		t.Fatalf("unexpected copied content: %q", data)
+	}
+	info, err := os.Stat(dst)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if runtime.GOOS != "windows" && info.Mode().Perm() != 0750 {
+		t.Fatalf("expected copied mode 0750, got %v", info.Mode().Perm())
+	}
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte("plain binary"))
+	}))
+	defer server.Close()
+
+	result, err := DownloadAndExtract(&github.AssetInfo{Name: "tool.bin", DownloadURL: server.URL}, "linux", "amd64")
+	if err != nil {
+		t.Fatalf("DownloadAndExtract failed: %v", err)
+	}
+	defer os.RemoveAll(result.TempDir)
+	if !result.IsBinary || len(result.Files) != 1 || result.Files[0] != "tool.bin" {
+		t.Fatalf("unexpected result: %+v", result)
+	}
+}
+
+func TestVerifyChecksumFailures(t *testing.T) {
+	tmpDir := t.TempDir()
+	path := filepath.Join(tmpDir, "payload.bin")
+	if err := os.WriteFile(path, []byte("payload"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	SetAssetDigest("sha256:" + strings.Repeat("0", 64))
+	defer ClearAssetDigest()
+	if err := verifyChecksumIfAvailable(path, "payload.bin"); err == nil {
+		t.Fatal("expected checksum mismatch error")
+	}
+}
+
+func TestParseChecksumVariantsAndLocalVerification(t *testing.T) {
+	tmpDir := t.TempDir()
+	oldWd, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chdir(tmpDir); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chdir(oldWd) })
+
+	payload := filepath.Join(tmpDir, "payload.bin")
+	if err := os.WriteFile(payload, []byte("payload"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	sha256Sum, err := ComputeSHA256(payload)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sha512Sum, err := ComputeSHA512(payload)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	checksumPath := filepath.Join(tmpDir, "checksums.txt")
+	content := strings.Join([]string{
+		"# comment",
+		strings.Repeat("a", 32) + "  other.bin",
+		sha512Sum + "  *nested/payload.bin",
+		sha256Sum,
+	}, "\n")
+	if err := os.WriteFile(checksumPath, []byte(content), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	info, err := ParseChecksumFile(checksumPath, "payload.bin")
+	if err != nil {
+		t.Fatalf("ParseChecksumFile failed: %v", err)
+	}
+	if info.Type != ChecksumTypeSHA512 || info.Expected != sha512Sum {
+		t.Fatalf("unexpected checksum info: %+v", info)
+	}
+
+	if err := verifyChecksumIfAvailable(payload, "payload.bin"); err != nil {
+		t.Fatalf("local checksum verification failed: %v", err)
+	}
+
+	missingChecksumPath := filepath.Join(tmpDir, "missing-checksums.txt")
+	if err := os.WriteFile(missingChecksumPath, []byte("not-a-hash other.bin\nalso-not-a-hash missing.bin\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := ParseChecksumFile(missingChecksumPath, "absent.bin"); err == nil {
+		t.Fatal("expected missing checksum error")
+	}
+	if _, err := ParseChecksumFile(filepath.Join(tmpDir, "missing.txt"), "payload.bin"); err == nil {
+		t.Fatal("expected missing checksum file error")
+	}
+	if err := VerifyChecksum(payload, sha256Sum, ChecksumTypeMD5); err == nil {
+		t.Fatal("expected unsupported checksum error")
+	}
+}
+
+func TestFindBinaryExecutableFallback(t *testing.T) {
+	tmpDir := t.TempDir()
+	toolPath := filepath.Join(tmpDir, "bin", "fallback")
+	if err := os.MkdirAll(filepath.Dir(toolPath), 0755); err != nil {
+		t.Fatal(err)
+	}
+	mode := os.FileMode(0755)
+	if runtime.GOOS == "windows" {
+		mode = 0644
+	}
+	if err := os.WriteFile(toolPath, []byte("binary"), mode); err != nil {
+		t.Fatal(err)
+	}
+	files := []string{"docs/readme.txt", "bin/fallback"}
+	got := FindBinary(files, "missing", tmpDir)
+	if runtime.GOOS == "windows" {
+		if got != "" {
+			t.Fatalf("windows should not see executable mode fallback, got %q", got)
+		}
+		return
+	}
+	if got != "bin/fallback" {
+		t.Fatalf("expected executable fallback, got %q", got)
 	}
 }
 

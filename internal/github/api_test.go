@@ -260,6 +260,35 @@ func TestContainsAny(t *testing.T) {
 	}
 }
 
+func TestGetLatestReleaseWithOptions_NoReleases(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/repos/owner/repo/releases" {
+			t.Fatalf("unexpected path: %s", r.URL.Path)
+		}
+		_ = json.NewEncoder(w).Encode([]map[string]any{})
+	}))
+	defer server.Close()
+
+	client := NewClient()
+	client.client.BaseURL = mustParseURL(t, server.URL+"/")
+	if _, err := client.GetLatestReleaseWithOptions(context.Background(), "owner", "repo", true); err == nil {
+		t.Fatal("expected no releases error")
+	}
+}
+
+func TestGetLatestReleaseWithOptions_ListError(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Error(w, "boom", http.StatusInternalServerError)
+	}))
+	defer server.Close()
+
+	client := NewClient()
+	client.client.BaseURL = mustParseURL(t, server.URL+"/")
+	if _, err := client.GetLatestReleaseWithOptions(context.Background(), "owner", "repo", true); err == nil {
+		t.Fatal("expected list releases error")
+	}
+}
+
 func TestFindMatchingAsset(t *testing.T) {
 	release := &ReleaseInfo{
 		Assets: []AssetInfo{
@@ -370,6 +399,20 @@ func TestTokenTransportAddsAuthorization(t *testing.T) {
 	}
 }
 
+func TestNewClientWithToken(t *testing.T) {
+	oldToken := os.Getenv("GITHUB_TOKEN")
+	os.Setenv("GITHUB_TOKEN", "secret")
+	t.Cleanup(func() { os.Setenv("GITHUB_TOKEN", oldToken) })
+
+	client := NewClient()
+	if client.token != "secret" {
+		t.Fatalf("expected token to be captured, got %q", client.token)
+	}
+	if client.client == nil {
+		t.Fatal("expected github client")
+	}
+}
+
 func TestFetchMultipleReleases(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/repos/bad/repo/releases/latest" {
@@ -454,5 +497,60 @@ func TestGetLatestRelease_RateLimitError(t *testing.T) {
 	var rl *gh.RateLimitError
 	if !errors.As(err, &rl) {
 		t.Fatalf("expected wrapped RateLimitError, got %T %v", err, err)
+	}
+}
+
+type assetDigestRewriteTransport struct {
+	base   http.RoundTripper
+	target *url.URL
+}
+
+func (t *assetDigestRewriteTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+	if req.URL.Host == "api.github.com" {
+		clone := req.Clone(req.Context())
+		clone.URL.Scheme = t.target.Scheme
+		clone.URL.Host = t.target.Host
+		clone.Host = t.target.Host
+		req = clone
+	}
+	return t.base.RoundTrip(req)
+}
+
+func TestGetAssetDigest(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/repos/owner/repo/releases/assets/1":
+			_ = json.NewEncoder(w).Encode(map[string]string{"digest": "sha256:abc"})
+		case "/repos/owner/repo/releases/assets/2":
+			http.Error(w, "missing", http.StatusNotFound)
+		case "/repos/owner/repo/releases/assets/3":
+			_, _ = w.Write([]byte("{bad json"))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer server.Close()
+
+	target, err := url.Parse(server.URL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	oldTransport := http.DefaultClient.Transport
+	base := oldTransport
+	if base == nil {
+		base = http.DefaultTransport
+	}
+	http.DefaultClient.Transport = &assetDigestRewriteTransport{base: base, target: target}
+	t.Cleanup(func() { http.DefaultClient.Transport = oldTransport })
+
+	client := NewClient()
+	if got := client.GetAssetDigest(context.Background(), "owner", "repo", 1); got != "sha256:abc" {
+		t.Fatalf("unexpected digest: %q", got)
+	}
+	if got := client.GetAssetDigest(context.Background(), "owner", "repo", 2); got != "" {
+		t.Fatalf("expected empty digest for non-200, got %q", got)
+	}
+	if got := client.GetAssetDigest(context.Background(), "owner", "repo", 3); got != "" {
+		t.Fatalf("expected empty digest for invalid JSON, got %q", got)
 	}
 }

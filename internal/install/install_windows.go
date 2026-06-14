@@ -5,7 +5,6 @@ package install
 import (
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -131,7 +130,7 @@ func (i *Installer) installWindowsMSI(name string, release *github.ReleaseInfo, 
 		return nil, fmt.Errorf("failed to read MSI product code: %w", err)
 	}
 
-	cmd := exec.Command("msiexec", "/i", result.Path, "/qn", "/norestart")
+	cmd := execCommandFunc("msiexec", "/i", result.Path, "/qn", "/norestart")
 	cmd.Stdin = os.Stdin
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
@@ -155,7 +154,7 @@ func (i *Installer) installWindowsInstaller(name string, release *github.Release
 	}
 	defer os.RemoveAll(result.TempDir)
 
-	cmd := exec.Command(result.Path)
+	cmd := execCommandFunc(result.Path)
 	cmd.Stdin = os.Stdin
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
@@ -253,7 +252,7 @@ $view.GetType().InvokeMember('Execute', 'InvokeMethod', $null, $view, $null) | O
 $record = $view.GetType().InvokeMember('Fetch', 'InvokeMethod', $null, $view, $null)
 if ($null -eq $record) { exit 2 }
 $record.GetType().InvokeMember('StringData', 'GetProperty', $null, $record, 1)`
-	output, err := exec.Command("powershell.exe", "-NoProfile", "-NonInteractive", "-Command", script, msiPath).Output()
+	output, err := execCommandFunc("powershell.exe", "-NoProfile", "-NonInteractive", "-Command", script, msiPath).Output()
 	if err != nil {
 		return "", err
 	}
@@ -306,7 +305,7 @@ func (i *Installer) uninstallWindowsMSI(name, productCode string) error {
 	if productCode == "" {
 		return fmt.Errorf("cannot uninstall %s: missing MSI product code", name)
 	}
-	cmd := exec.Command("msiexec", "/x", productCode, "/qn", "/norestart")
+	cmd := execCommandFunc("msiexec", "/x", productCode, "/qn", "/norestart")
 	cmd.Stdin = os.Stdin
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr

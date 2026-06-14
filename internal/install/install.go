@@ -20,6 +20,8 @@ var downloadFileFunc = download.DownloadFile
 var execCommandFunc = exec.Command
 var execLookPathFunc = exec.LookPath
 var getuidFunc = syscall.Getuid
+var runtimeGOOS = runtime.GOOS
+var runtimeGOARCH = runtime.GOARCH
 
 // Installer handles installation of binaries
 type Installer struct {
@@ -61,7 +63,7 @@ func (i *Installer) Install(name string, release *github.ReleaseInfo, asset *git
 		return i.installAppImage(name, release, asset, binDir)
 	}
 
-	if runtime.GOOS == "windows" {
+	if runtimeGOOS == "windows" {
 		preference := "auto"
 		if len(installTypePreference) > 0 && strings.TrimSpace(installTypePreference[0]) != "" {
 			preference = installTypePreference[0]
@@ -76,7 +78,7 @@ func (i *Installer) Install(name string, release *github.ReleaseInfo, asset *git
 	}
 
 	// Regular binary package - download and extract with caching
-	result, err := download.DownloadAndExtractWithCache(asset, runtime.GOOS, runtime.GOARCH, release.Owner+"/"+release.Repo, release.TagName)
+	result, err := download.DownloadAndExtractWithCache(asset, runtimeGOOS, runtimeGOARCH, release.Owner+"/"+release.Repo, release.TagName)
 	if err != nil {
 		return nil, fmt.Errorf("failed to download: %w", err)
 	}
@@ -86,7 +88,7 @@ func (i *Installer) Install(name string, release *github.ReleaseInfo, asset *git
 	// Find the binary from extracted files
 	var binaryPath string
 	binaryName := name
-	if runtime.GOOS == "windows" {
+	if runtimeGOOS == "windows" {
 		binaryName += ".exe"
 	}
 
@@ -134,7 +136,7 @@ func (i *Installer) Install(name string, release *github.ReleaseInfo, asset *git
 
 	// Get just the binary name for the final path
 	finalBinaryName := name
-	if runtime.GOOS == "windows" && !strings.HasSuffix(name, ".exe") {
+	if runtimeGOOS == "windows" && !strings.HasSuffix(name, ".exe") {
 		finalBinaryName += ".exe"
 	}
 	finalPath := filepath.Join(binDir, finalBinaryName)
@@ -340,7 +342,7 @@ func (i *Installer) Uninstall(name string, installType config.InstallType, syste
 	case config.InstallTypeWindowsInstaller:
 		return i.uninstallWindowsInstaller(name)
 	default:
-		if runtime.GOOS == "windows" {
+		if runtimeGOOS == "windows" {
 			return i.uninstallWindowsPortable(name, meta)
 		}
 		return i.uninstallBinary(name)
@@ -351,7 +353,7 @@ func (i *Installer) Uninstall(name string, installType config.InstallType, syste
 func (i *Installer) uninstallBinary(name string) error {
 	binDir := expandPath(i.BinDir)
 	path := filepath.Join(binDir, name)
-	if runtime.GOOS == "windows" {
+	if runtimeGOOS == "windows" {
 		path += ".exe"
 	}
 
@@ -360,7 +362,7 @@ func (i *Installer) uninstallBinary(name string) error {
 	}
 
 	// Try without .exe on Windows
-	if runtime.GOOS == "windows" {
+	if runtimeGOOS == "windows" {
 		pathNoExt := filepath.Join(binDir, name)
 		if _, err := os.Stat(pathNoExt); err == nil {
 			return os.Remove(pathNoExt)
@@ -435,7 +437,7 @@ func (i *Installer) EnsureBinDir() error {
 func (i *Installer) BinDirInPATH() bool {
 	pathEnv := os.Getenv("PATH")
 	pathSep := ":"
-	if runtime.GOOS == "windows" {
+	if runtimeGOOS == "windows" {
 		pathSep = ";"
 	}
 
@@ -509,7 +511,7 @@ func CreateVersionedSymlink(binDir, name, version, currentBinaryPath string) (st
 	binDir = expandPath(binDir)
 	// Normalize version: strip leading "v" for the file name suffix
 	versionedName := name + "-" + version
-	if runtime.GOOS == "windows" {
+	if runtimeGOOS == "windows" {
 		versionedName += ".exe"
 	}
 	versionedPath := filepath.Join(binDir, versionedName)
@@ -523,7 +525,7 @@ func CreateVersionedSymlink(binDir, name, version, currentBinaryPath string) (st
 	}
 
 	// On non-Windows, update symlink to point to the versioned binary
-	if runtime.GOOS != "windows" {
+	if runtimeGOOS != "windows" {
 		// Remove existing symlink or binary at the target path
 		_ = os.Remove(currentBinaryPath)
 		if err := os.Symlink(versionedPath, currentBinaryPath); err != nil {

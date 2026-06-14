@@ -208,12 +208,15 @@ func TestCmdIntegrationWorkflow(t *testing.T) {
 	tmpHome := t.TempDir()
 	origHome := os.Getenv("HOME")
 	origUserProfile := os.Getenv("USERPROFILE")
+	origLocalAppData := os.Getenv("LOCALAPPDATA")
 	defer func() {
 		_ = os.Setenv("HOME", origHome)
 		_ = os.Setenv("USERPROFILE", origUserProfile)
+		_ = os.Setenv("LOCALAPPDATA", origLocalAppData)
 	}()
 	_ = os.Setenv("HOME", tmpHome)
 	_ = os.Setenv("USERPROFILE", tmpHome)
+	_ = os.Setenv("LOCALAPPDATA", tmpHome)
 
 	origConfigPath := configPath
 	defer func() { configPath = origConfigPath }()

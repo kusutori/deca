@@ -3,12 +3,12 @@ package install
 import (
 	"fmt"
 	"os"
-	"os/exec"
 	"strings"
-	"syscall"
 
 	"golang.org/x/term"
 )
+
+var termReadPasswordFunc = term.ReadPassword
 
 // DetectPackageType detects the package type from filename
 func DetectPackageType(filename string) string {
@@ -31,15 +31,15 @@ func DetectPackageType(filename string) string {
 
 // IsSudoCached checks if sudo password is cached (no prompt needed)
 func IsSudoCached() bool {
-	cmd := exec.Command("sudo", "-n", "true")
+	cmd := execCommandFunc("sudo", "-n", "true")
 	return cmd.Run() == nil
 }
 
 // SudoRun runs a command with sudo, handling password prompt
 func SudoRun(name string, args ...string) error {
 	// Check if running as root
-	if syscall.Getuid() == 0 {
-		cmd := exec.Command(name, args...)
+	if getuidFunc() == 0 {
+		cmd := execCommandFunc(name, args...)
 		cmd.Stdin = os.Stdin
 		cmd.Stdout = os.Stdout
 		cmd.Stderr = os.Stderr
@@ -47,13 +47,13 @@ func SudoRun(name string, args ...string) error {
 	}
 
 	// Check if sudo is available
-	if _, err := exec.LookPath("sudo"); err != nil {
+	if _, err := execLookPathFunc("sudo"); err != nil {
 		return fmt.Errorf("sudo is not available")
 	}
 
 	// Check if sudo is cached
 	if IsSudoCached() {
-		cmd := exec.Command("sudo", append([]string{name}, args...)...)
+		cmd := execCommandFunc("sudo", append([]string{name}, args...)...)
 		cmd.Stdin = os.Stdin
 		cmd.Stdout = os.Stdout
 		cmd.Stderr = os.Stderr
@@ -64,7 +64,7 @@ func SudoRun(name string, args ...string) error {
 	fmt.Printf("This operation requires sudo: %s %s\n", name, strings.Join(args, " "))
 	fmt.Print("Password: ")
 
-	password, err := term.ReadPassword(int(os.Stdin.Fd()))
+	password, err := termReadPasswordFunc(int(os.Stdin.Fd()))
 	fmt.Println()
 	if err != nil {
 		return fmt.Errorf("failed to read password: %w", err)
@@ -73,7 +73,7 @@ func SudoRun(name string, args ...string) error {
 	// Build command args: sudo -S <name> <args...>
 	sudoArgs := []string{"-S", name}
 	sudoArgs = append(sudoArgs, args...)
-	cmd := exec.Command("sudo", sudoArgs...)
+	cmd := execCommandFunc("sudo", sudoArgs...)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 
