@@ -158,3 +158,16 @@ func TestClientRun(t *testing.T) {
 		t.Fatalf("expected version to exit 0, got %d", code)
 	}
 }
+
+func TestConfigHelpersReturnErrorsForMissingFiles(t *testing.T) {
+	missing := filepath.Join(t.TempDir(), "missing.toml")
+	if _, err := LoadConfigJSON(missing); err == nil {
+		t.Fatal("LoadConfigJSON accepted missing file")
+	}
+	if _, err := ListPackageNames(missing); err == nil {
+		t.Fatal("ListPackageNames accepted missing file")
+	}
+	if err := InjectSchema(missing, "schema.json"); err == nil {
+		t.Fatal("InjectSchema accepted missing config")
+	}
+}

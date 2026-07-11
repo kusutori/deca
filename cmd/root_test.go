@@ -71,6 +71,14 @@ func TestExecute_NoError(t *testing.T) {
 	Execute()
 }
 
+func TestExecute_ReturnsErrorCode(t *testing.T) {
+	RootCmd.SetArgs([]string{"definitely-not-a-command"})
+	t.Cleanup(func() { RootCmd.SetArgs(nil) })
+	if code := Execute(); code != 1 {
+		t.Fatalf("Execute() = %d, want 1", code)
+	}
+}
+
 func TestVersion(t *testing.T) {
 	if Version == "" {
 		t.Error("Version should be set")

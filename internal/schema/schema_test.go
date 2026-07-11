@@ -71,3 +71,15 @@ func TestInjectSchemaReference(t *testing.T) {
 		t.Fatalf("schema line should be first, got:\n%s", out)
 	}
 }
+
+func TestInjectSchemaReferenceRejectsInvalidInputs(t *testing.T) {
+	if err := InjectSchemaReference("", "schema.json"); err == nil {
+		t.Fatal("expected missing config path error")
+	}
+	if err := InjectSchemaReference("config.toml", ""); err == nil {
+		t.Fatal("expected missing schema path error")
+	}
+	if err := InjectSchemaReference(filepath.Join(t.TempDir(), "missing.toml"), "schema.json"); err == nil {
+		t.Fatal("expected missing config file error")
+	}
+}

@@ -17,6 +17,7 @@ import (
 	"github.com/kusutori/deca/internal/config"
 	"github.com/kusutori/deca/internal/github"
 	"github.com/kusutori/deca/internal/install"
+	"github.com/kusutori/deca/internal/ui"
 )
 
 func TestCacheCommandHelpers(t *testing.T) {
@@ -153,6 +154,110 @@ func TestMirrorCommandHelpers(t *testing.T) {
 	}
 }
 
+func TestMirrorSelectInteractive(t *testing.T) {
+	tmpHome := t.TempDir()
+	oldHome, oldUserProfile := os.Getenv("HOME"), os.Getenv("USERPROFILE")
+	if err := os.Setenv("HOME", tmpHome); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Setenv("USERPROFILE", tmpHome); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		_ = os.Setenv("HOME", oldHome)
+		_ = os.Setenv("USERPROFILE", oldUserProfile)
+	})
+	restoreTerminal := ui.SetTerminalDetectorForTesting(func() bool { return true })
+	t.Cleanup(restoreTerminal)
+
+	withInput := func(input string, fn func() error) error {
+		originalStdin := os.Stdin
+		reader, writer, err := os.Pipe()
+		if err != nil {
+			return err
+		}
+		if _, err := writer.WriteString(input); err != nil {
+			return err
+		}
+		_ = writer.Close()
+		os.Stdin = reader
+		defer func() {
+			os.Stdin = originalStdin
+			_ = reader.Close()
+		}()
+		return fn()
+	}
+	if err := withInput("invalid\n", doMirrorSelect); err != nil {
+		t.Fatalf("invalid interactive selection: %v", err)
+	}
+	if err := withInput("2\n", doMirrorSelect); err != nil {
+		t.Fatalf("valid interactive selection: %v", err)
+	}
+	cfg, err := config.LoadMirrorConfig(config.GetMirrorPath())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.CurrentName != "GitHub Fast (China)" {
+		t.Fatalf("current mirror = %q", cfg.CurrentName)
+	}
+}
+
+func TestRemoveDesktopEntryReportsRemovalFailure(t *testing.T) {
+	tmpHome := t.TempDir()
+	oldHome, oldUserProfile := os.Getenv("HOME"), os.Getenv("USERPROFILE")
+	_ = os.Setenv("HOME", tmpHome)
+	_ = os.Setenv("USERPROFILE", tmpHome)
+	t.Cleanup(func() {
+		_ = os.Setenv("HOME", oldHome)
+		_ = os.Setenv("USERPROFILE", oldUserProfile)
+	})
+	dryRun = false
+	entryPath := config.DesktopEntryPath("tool")
+	if err := os.MkdirAll(filepath.Join(entryPath, "child"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := removeDesktopEntry("tool"); err == nil {
+		t.Fatal("expected removal failure for non-empty directory")
+	}
+}
+
+func TestConfigCommandsWithoutConfigOrEditor(t *testing.T) {
+	tmpHome := t.TempDir()
+	oldHome, oldUserProfile := os.Getenv("HOME"), os.Getenv("USERPROFILE")
+	oldEditor, oldVisual, oldPath := os.Getenv("EDITOR"), os.Getenv("VISUAL"), os.Getenv("PATH")
+	_ = os.Setenv("HOME", tmpHome)
+	_ = os.Setenv("USERPROFILE", tmpHome)
+	_ = os.Setenv("EDITOR", "")
+	_ = os.Setenv("VISUAL", "")
+	_ = os.Setenv("PATH", t.TempDir())
+	t.Cleanup(func() {
+		_ = os.Setenv("HOME", oldHome)
+		_ = os.Setenv("USERPROFILE", oldUserProfile)
+		_ = os.Setenv("EDITOR", oldEditor)
+		_ = os.Setenv("VISUAL", oldVisual)
+		_ = os.Setenv("PATH", oldPath)
+	})
+	missing := filepath.Join(tmpHome, "missing.toml")
+	for _, args := range [][]string{{"--config", missing, "config", "edit"}, {"--config", missing, "config", "show"}, {"--config", missing, "config", "diff"}} {
+		if _, _, err := runCmd(t, args...); err != nil {
+			t.Fatalf("config missing path %v: %v", args, err)
+		}
+	}
+	present := filepath.Join(tmpHome, "present.toml")
+	if err := os.WriteFile(present, []byte("[packages]\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := runCmd(t, "--config", present, "config", "edit"); err != nil {
+		t.Fatalf("config edit without editor: %v", err)
+	}
+	if _, _, err := runCmd(t, "--config", present, "config", "show"); err != nil {
+		t.Fatalf("config show empty: %v", err)
+	}
+	if _, _, err := runCmd(t, "--config", present, "config", "diff"); err != nil {
+		t.Fatalf("config diff empty: %v", err)
+	}
+}
+
 func TestDesktopCommandHelpers(t *testing.T) {
 	tmpHome := t.TempDir()
 	oldHome := os.Getenv("HOME")
@@ -245,6 +350,26 @@ func TestConfigAndSearchHelpers(t *testing.T) {
 	os.Unsetenv("EDITOR")
 	if got := getEditor(); got != "visual-cmd" {
 		t.Fatalf("expected VISUAL, got %q", got)
+	}
+	os.Unsetenv("VISUAL")
+	oldPath := os.Getenv("PATH")
+	pathDir := t.TempDir()
+	t.Cleanup(func() { _ = os.Setenv("PATH", oldPath) })
+	if err := os.Setenv("PATH", pathDir); err != nil {
+		t.Fatal(err)
+	}
+	if got := getEditor(); got != "" {
+		t.Fatalf("expected no editor, got %q", got)
+	}
+	vimName := "vim"
+	if runtime.GOOS == "windows" {
+		vimName += ".exe"
+	}
+	if err := os.WriteFile(filepath.Join(pathDir, vimName), []byte("test"), 0700); err != nil {
+		t.Fatal(err)
+	}
+	if got := getEditor(); got != "vim" {
+		t.Fatalf("expected detected vim, got %q", got)
 	}
 
 	if got := truncate("short", 10); got != "short" {

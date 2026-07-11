@@ -6,6 +6,8 @@ import (
 	"github.com/kusutori/deca/cmd"
 )
 
+var exit = os.Exit
+
 func main() {
-	os.Exit(cmd.Execute())
+	exit(cmd.Execute())
 }

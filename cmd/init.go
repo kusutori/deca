@@ -48,16 +48,16 @@ your system type for optimal package downloads.`,
 
 		// Create default configuration
 		cfg := &config.Config{
-			BinDir:     config.DefaultBinDir(),
-			OS:         systemInfo.OS,
-			Arch:       systemInfo.Arch,
-			Packages:   make(map[string]config.Package),
+			BinDir:   config.DefaultBinDir(),
+			OS:       systemInfo.OS,
+			Arch:     systemInfo.Arch,
+			Packages: make(map[string]config.Package),
 			SystemInfo: &config.SystemInfo{
-				OS:            systemInfo.OS,
-				Arch:          systemInfo.Arch,
-				Distribution:  systemInfo.Distribution,
+				OS:             systemInfo.OS,
+				Arch:           systemInfo.Arch,
+				Distribution:   systemInfo.Distribution,
 				PackageManager: systemInfo.PackageManager,
-				BinDir:        systemInfo.BinDir,
+				BinDir:         systemInfo.BinDir,
 			},
 		}
 
@@ -99,18 +99,30 @@ func init() {
 
 // SystemInfo contains detected system information
 type SystemInfo struct {
-	OS            string // linux, darwin, windows
-	Arch          string // amd64, arm64, etc.
-	Distribution  string // ubuntu, debian, fedora, etc.
+	OS             string // linux, darwin, windows
+	Arch           string // amd64, arm64, etc.
+	Distribution   string // ubuntu, debian, fedora, etc.
 	PackageManager string // apt, dnf, yum, brew
-	BinDir        string
+	BinDir         string
 }
+
+// These paths are variables so the distribution detector can be exercised
+// against fixtures without reading the host system's configuration.
+var (
+	osReleasePath     = "/etc/os-release"
+	linuxReleaseFiles = []string{
+		"/etc/lsb-release",
+		"/etc/redhat-release",
+		"/etc/centos-release",
+		"/etc/fedora-release",
+	}
+)
 
 // detectSystemInfo detects the current system information
 func detectSystemInfo() SystemInfo {
 	info := SystemInfo{
-		OS:   runtime.GOOS,
-		Arch: runtime.GOARCH,
+		OS:     runtime.GOOS,
+		Arch:   runtime.GOARCH,
 		BinDir: config.DefaultBinDir(),
 	}
 
@@ -132,9 +144,8 @@ func detectSystemInfo() SystemInfo {
 // detectLinuxDistribution detects the Linux distribution
 func detectLinuxDistribution() string {
 	// Try /etc/os-release first
-	etcRelease := "/etc/os-release"
-	if _, err := os.Stat(etcRelease); err == nil {
-		data, err := os.ReadFile(etcRelease)
+	if _, err := os.Stat(osReleasePath); err == nil {
+		data, err := os.ReadFile(osReleasePath)
 		if err == nil {
 			content := string(data)
 			for _, line := range strings.Split(content, "\n") {
@@ -162,14 +173,7 @@ func detectLinuxDistribution() string {
 	}
 
 	// Try other common files
-	distFiles := []string{
-		"/etc/lsb-release",
-		"/etc/redhat-release",
-		"/etc/centos-release",
-		"/etc/fedora-release",
-	}
-
-	for _, file := range distFiles {
+	for _, file := range linuxReleaseFiles {
 		if _, err := os.Stat(file); err == nil {
 			return "linux" // Generic Linux
 		}

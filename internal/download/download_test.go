@@ -4,6 +4,7 @@ import (
 	"archive/tar"
 	"archive/zip"
 	"compress/gzip"
+	"errors"
 	"io"
 	"net"
 	"net/http"
@@ -63,6 +64,43 @@ func TestFileSize(t *testing.T) {
 				t.Errorf("FileSize(%d) = %q, want %q", tt.size, got, tt.want)
 			}
 		})
+	}
+}
+
+func TestDownloadFileWithCacheFailurePaths(t *testing.T) {
+	tmp := t.TempDir()
+	path := filepath.Join(tmp, "asset.bin")
+	originalGet, originalCreate, originalRename := httpGetFunc, downloadCreate, downloadRename
+	t.Cleanup(func() {
+		httpGetFunc = originalGet
+		downloadCreate = originalCreate
+		downloadRename = originalRename
+	})
+
+	httpGetFunc = func(string) (*http.Response, error) { return nil, errors.New("network unavailable") }
+	if err := downloadFileWithCache("unused", path, "owner/fail", "v1", "asset.bin", ""); err == nil {
+		t.Fatal("expected network error")
+	}
+
+	httpGetFunc = func(string) (*http.Response, error) {
+		return &http.Response{StatusCode: http.StatusBadGateway, Body: io.NopCloser(strings.NewReader("bad gateway"))}, nil
+	}
+	if err := downloadFileWithCache("unused", path, "owner/fail", "v1", "asset.bin", ""); err == nil {
+		t.Fatal("expected HTTP error")
+	}
+
+	httpGetFunc = func(string) (*http.Response, error) {
+		return &http.Response{StatusCode: http.StatusOK, Body: io.NopCloser(strings.NewReader("payload"))}, nil
+	}
+	downloadCreate = func(string) (*os.File, error) { return nil, errors.New("cannot create") }
+	if err := downloadFileWithCache("unused", path, "owner/fail", "v1", "asset.bin", ""); err == nil {
+		t.Fatal("expected create error")
+	}
+
+	downloadCreate = os.Create
+	downloadRename = func(string, string) error { return errors.New("cannot rename") }
+	if err := downloadFileWithCache("unused", path, "owner/fail", "v1", "asset.bin", ""); err == nil {
+		t.Fatal("expected rename error")
 	}
 }
 
@@ -131,6 +169,88 @@ func TestExtractZip(t *testing.T) {
 		}
 		if string(data) != content {
 			t.Fatalf("content mismatch for %s: got %q want %q", name, string(data), content)
+		}
+	}
+}
+
+func TestExtractZipRejectsPathTraversal(t *testing.T) {
+	tmpDir := t.TempDir()
+	archivePath := filepath.Join(tmpDir, "malicious.zip")
+	file, err := os.Create(archivePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	writer := zip.NewWriter(file)
+	entry, err := writer.Create("../outside.txt")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := entry.Write([]byte("bad")); err != nil {
+		t.Fatal(err)
+	}
+	if err := writer.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if err := file.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := extractZip(archivePath, filepath.Join(tmpDir, "dest")); err == nil {
+		t.Fatal("expected path traversal rejection")
+	}
+}
+
+func TestExtractTarHandlesDirectoriesAndSymlinks(t *testing.T) {
+	tmpDir := t.TempDir()
+	archivePath := filepath.Join(tmpDir, "entries.tar.gz")
+	file, err := os.Create(archivePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	gz := gzip.NewWriter(file)
+	tarWriter := tar.NewWriter(gz)
+	entries := []struct {
+		header tar.Header
+		data   string
+	}{
+		{header: tar.Header{Name: "bin/", Mode: 0755, Typeflag: tar.TypeDir}},
+		{header: tar.Header{Name: "bin/tool", Mode: 0755, Typeflag: tar.TypeReg, Size: int64(len("binary"))}, data: "binary"},
+	}
+	if runtime.GOOS != "windows" {
+		entries = append(entries, struct {
+			header tar.Header
+			data   string
+		}{header: tar.Header{Name: "tool-link", Mode: 0755, Typeflag: tar.TypeSymlink, Linkname: "bin/tool"}})
+	}
+	for _, entry := range entries {
+		if err := tarWriter.WriteHeader(&entry.header); err != nil {
+			t.Fatal(err)
+		}
+		if entry.data != "" {
+			if _, err := tarWriter.Write([]byte(entry.data)); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+	if err := tarWriter.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if err := gz.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if err := file.Close(); err != nil {
+		t.Fatal(err)
+	}
+	dest := filepath.Join(tmpDir, "dest")
+	files, err := extractTarGz(archivePath, dest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(files) != len(entries) {
+		t.Fatalf("extracted entries = %v", files)
+	}
+	if runtime.GOOS != "windows" {
+		if info, err := os.Lstat(filepath.Join(dest, "tool-link")); err != nil || info.Mode()&os.ModeSymlink == 0 {
+			t.Fatalf("expected symlink: %v, %v", info, err)
 		}
 	}
 }
@@ -236,6 +356,19 @@ func TestDownloadAndExtractWithCacheTarGz(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(result.TempDir, "tool")); err != nil {
 		t.Fatalf("expected extracted tool: %v", err)
+	}
+	// A second download must use the cached archive rather than the server.
+	server.Close()
+	cachedResult, err := DownloadAndExtractWithCache(&github.AssetInfo{
+		Name:        "tool.tar.gz",
+		DownloadURL: server.URL,
+	}, runtimeGOOS(), runtimeGOARCH(), "owner/repo", "v1.0.0")
+	if err != nil {
+		t.Fatalf("cached DownloadAndExtractWithCache failed: %v", err)
+	}
+	defer os.RemoveAll(cachedResult.TempDir)
+	if len(cachedResult.Files) != 1 || cachedResult.Files[0] != "tool" {
+		t.Fatalf("unexpected cached result: %+v", cachedResult)
 	}
 }
 

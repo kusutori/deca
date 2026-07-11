@@ -72,6 +72,24 @@ func TestColorOutputHelpers(t *testing.T) {
 	}
 }
 
+func TestColorOutputHelpersTerminal(t *testing.T) {
+	restoreTerminal := SetTerminalDetectorForTesting(func() bool { return true })
+	t.Cleanup(restoreTerminal)
+	out := captureUIOutput(t, func() {
+		DisableColors()
+		PrintSuccess("done")
+		PrintError("bad")
+		PrintWarning("careful")
+		PrintInfo("note")
+		EnableColors()
+	})
+	for _, want := range []string{"✓ done", "✗ bad", "⚠ careful", "ℹ note"} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("terminal output missing %q:\n%s", want, out)
+		}
+	}
+}
+
 func TestErrorPrinters(t *testing.T) {
 	out := captureUIOutput(t, func() {
 		PrintDecaError(decaerr.NewConfigNotFoundError("missing.toml"))

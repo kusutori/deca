@@ -11,12 +11,12 @@ import (
 // Colors for different output types
 var (
 	// Primary colors for main elements
-	Primary    = color.New(color.FgCyan)
-	Secondary  = color.New(color.FgBlue)
-	Success    = color.New(color.FgGreen)
-	Warning    = color.New(color.FgYellow)
-	Error      = color.New(color.FgRed)
-	Info       = color.New(color.FgWhite)
+	Primary   = color.New(color.FgCyan)
+	Secondary = color.New(color.FgBlue)
+	Success   = color.New(color.FgGreen)
+	Warning   = color.New(color.FgYellow)
+	Error     = color.New(color.FgRed)
+	Info      = color.New(color.FgWhite)
 
 	// Package related
 	PackageName = color.New(color.FgGreen, color.Bold)
@@ -26,9 +26,9 @@ var (
 	VersionOld  = color.New(color.FgHiYellow)
 
 	// Status indicators
-	Installed   = color.New(color.FgGreen, color.Bold)
+	Installed    = color.New(color.FgGreen, color.Bold)
 	NotInstalled = color.New(color.FgRed, color.Bold)
-	UpdateAvail = color.New(color.FgHiYellow, color.Bold)
+	UpdateAvail  = color.New(color.FgHiYellow, color.Bold)
 
 	// Search results
 	SearchTitle = color.New(color.FgCyan, color.Bold)
@@ -43,9 +43,21 @@ var (
 	DoctorCheck = color.New(color.FgCyan)
 )
 
+var terminalDetector = func() bool {
+	return isatty.IsTerminal(os.Stdout.Fd()) || isatty.IsCygwinTerminal(os.Stdout.Fd())
+}
+
 // IsTerminal checks if stdout is a terminal
 func IsTerminal() bool {
-	return isatty.IsTerminal(os.Stdout.Fd()) || isatty.IsCygwinTerminal(os.Stdout.Fd())
+	return terminalDetector()
+}
+
+// SetTerminalDetectorForTesting temporarily overrides terminal detection.
+// It is intended for deterministic tests of interactive command paths.
+func SetTerminalDetectorForTesting(detector func() bool) func() {
+	original := terminalDetector
+	terminalDetector = detector
+	return func() { terminalDetector = original }
 }
 
 // EnableColors enables colors (default on terminals)
